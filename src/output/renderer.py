@@ -95,18 +95,18 @@ _SIDE_OVERRIDE: dict[str, str] = {
 
 # ── Editorial colour palette ───────────────────────────────────────────────────
 _EDITORIAL: dict[str, tuple[int, int, int]] = {
-    "canvas_bg":    (18,  18,  18),
-    "header_bg":    (10,  10,  10),
-    "panel_bg":     (24,  24,  26),
-    "card_bg":      (34,  34,  38),
-    "divider":      (58,  58,  62),
-    "text_primary": (238, 238, 232),
-    "text_muted":   (155, 150, 142),
-    "text_caption": (95,  92,  87),
-    "accent_gold":  (212, 175, 100),
-    "critical":     (192, 55,  55),
-    "moderate":     (208, 132, 42),
-    "minor":        (68,  155, 86),
+    "canvas_bg":    (14,  14,  16),   # near-black, very slight blue tint
+    "header_bg":    (8,   8,   10),   # true black header
+    "panel_bg":     (20,  20,  22),   # slightly lighter panel
+    "card_bg":      (26,  26,  30),   # card background
+    "divider":      (40,  40,  44),   # subtle divider — not too visible
+    "text_primary": (242, 240, 235),  # warm near-white
+    "text_muted":   (148, 144, 138),  # warm mid-grey
+    "text_caption": (80,  78,  74),   # very muted caption
+    "accent_gold":  (210, 172, 95),   # warm editorial gold
+    "critical":     (186, 50,  50),   # desaturated red — not garish
+    "moderate":     (204, 128, 38),   # warm amber
+    "minor":        (62,  148, 80),   # muted green
 }
 
 # ── Colour name → RGB lookup for palette swatches ────────────────────────────
@@ -283,6 +283,59 @@ def annotate_caricature(
 # Editorial layout — dark magazine aesthetic
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _estimate_cards_top_offset(
+    remarks: list[Any],
+    col_w: int,
+    avail_h: int,
+    fonts: dict,
+    E: dict,
+) -> int:
+    """Compute a top-offset so the card block is vertically centred in avail_h.
+
+    Returns offset in pixels (0 if cards already fill > 60% of panel).
+    """
+    if not remarks:
+        return 0
+
+    BAR_W  = 3
+    PAD_L  = BAR_W + 22
+    PAD_R  = 28
+    PAD_T  = 14
+    PAD_B  = 14
+    LINE_M = 18
+    LINE_I = 22
+    LINE_F = 26
+    GAP_MI = 8
+    GAP_IF = 6
+    CARD_SEP = 1
+    BONUS  = 20   # matches the bonus added in _draw_remark_cards
+
+    f_issue = _ef(fonts, "montserrat_light",    13)
+    f_fix   = _ef(fonts, "montserrat_semibold", 15)
+    text_w  = col_w - PAD_L - PAD_R
+
+    total_est = 0
+    for r in remarks:
+        issue_lines = _wrap_px((getattr(r, "issue", "") or "").strip(), text_w, f_issue, max_lines=2)
+        fix_lines   = _wrap_px((getattr(r, "fix",   "") or "").strip(), text_w, f_fix,   max_lines=3)
+        content_h = (LINE_M
+                     + (GAP_MI if issue_lines else 0)
+                     + len(issue_lines) * LINE_I
+                     + (GAP_IF if issue_lines and fix_lines else 0)
+                     + len(fix_lines) * LINE_F)
+        total_est += PAD_T + content_h + PAD_B + BONUS
+
+    total_est += CARD_SEP * max(0, len(remarks) - 1)
+
+    # If cards fill >65% of panel, don't add offset — they need the room
+    if total_est >= int(avail_h * 0.65):
+        return 0
+
+    # Centre: put half the leftover space above the cards (capped at 80px max offset)
+    leftover = avail_h - total_est
+    return min(80, leftover // 2)
+
+
 def _editorial_layout(
     fig: Any,
     remarks: list[Any],
@@ -298,16 +351,19 @@ def _editorial_layout(
 ) -> Any:
     """Render the dark-mode editorial magazine layout.
 
-    Structure:
+    Minimalist, brand-quality design:
+
       ┌──────────────────────────────────────────────────────────────┐
-      │ HEADER (72px) — STYLE ANALYSIS  ·  USER  |  Occasion | N/10 │
+      │ ▌ STYLE ANALYSIS  ·  ARJUN          Smart Casual   5 / 10   │ ← 68px header
       ├──────────────────────┬───────────────────────────────────────┤
-      │  caricature (50%)    │  Remark cards (50%)                  │
-      │  clean, full-size    │  [N] SEV — ZONE  large text          │
-      │                      │  Issue text (grey 13pt)              │
-      │                      │  Fix text (white 15pt)               │
+      │                      │                                       │
+      │   CARICATURE (45%)   │   REMARKS (55%)                       │
+      │   clean, full        │   clean cards, breathing room        │
+      │                      │                                       │
       ├──────────────────────┴───────────────────────────────────────┤
-      │ FOOTER (96px) — colour swatches  |  Wear Instead text        │
+      │  ● ● ● ●    YOUR PALETTE      │  WEAR INSTEAD: ...           │ ← 80px footer
+      ├──────────────────────────────────────────────────────────────┤
+      │  SHOP THIS LOOK  (optional)                                   │
       └──────────────────────────────────────────────────────────────┘
     """
     from PIL import Image, ImageDraw
@@ -316,99 +372,114 @@ def _editorial_layout(
     fonts  = _ensure_editorial_fonts()
     fw, fh = fig.size
 
-    HEADER_H = 72
-    FOOTER_H = 96
+    HEADER_H = 68
+    FOOTER_H = 80
 
-    # Canvas: caricature half + cards half, minimum 1400px wide
-    # Scale caricature to a standard height for readability
-    TARGET_FIG_H = max(fh, 600)   # at least 600px tall
+    # Ensure minimum figure height for readability
+    TARGET_FIG_H = max(fh, 620)
     if fh < TARGET_FIG_H:
-        scale    = TARGET_FIG_H / fh
-        new_fw   = int(fw * scale)
-        fig      = fig.resize((new_fw, TARGET_FIG_H))
-        fw, fh   = fig.size
+        scale  = TARGET_FIG_H / fh
+        new_fw = int(fw * scale)
+        fig    = fig.resize((new_fw, TARGET_FIG_H))
+        fw, fh = fig.size
 
-    img_col  = fw                      # caricature column = figure width
-    card_col = max(img_col, 680)       # card column, at least 680px
+    # Layout: 45% caricature, 55% cards — minimum total 1320px wide
+    img_col  = fw
+    card_col = max(int(fw * 1.22), 680)  # cards column always wider than caricature
     total_w  = img_col + card_col
 
-    # SHOP section height: 48px header + n_entries × 120px rows (max 4 entries)
-    n_shop_entries = min(4, len(product_entries)) if product_entries else 0
-    SHOP_H = (48 + n_shop_entries * 120) if n_shop_entries else 0
-    total_h  = fh + HEADER_H + FOOTER_H + SHOP_H
+    # SHOP section: 52px header + rows × 100px per entry (max 3)
+    n_shop_entries = min(3, len(product_entries)) if product_entries else 0
+    SHOP_H = (52 + n_shop_entries * 100) if n_shop_entries else 0
+
+    total_h = fh + HEADER_H + FOOTER_H + SHOP_H
 
     canvas = Image.new("RGB", (total_w, total_h), E["canvas_bg"])
     draw   = ImageDraw.Draw(canvas)
 
     # ── 1. Header ─────────────────────────────────────────────────────────────
     draw.rectangle([0, 0, total_w, HEADER_H], fill=E["header_bg"])
-    # Gold accent bar (4px) on left edge
-    draw.rectangle([0, 0, 4, HEADER_H], fill=E["accent_gold"])
-    # Gold divider under header
+    # Thin gold accent bar (3px) at left edge
+    draw.rectangle([0, 0, 3, HEADER_H], fill=E["accent_gold"])
+    # 1px gold separator line under header
     draw.line([(0, HEADER_H - 1), (total_w, HEADER_H - 1)],
               fill=E["accent_gold"], width=1)
 
-    f_title = _ef(fonts, "playfair_bold",       30)
-    f_occ   = _ef(fonts, "montserrat_light",     14)
-    f_score = _ef(fonts, "playfair_bold",         22)
+    f_title  = _ef(fonts, "playfair_bold",      28)
+    f_occ    = _ef(fonts, "montserrat_light",    12)
+    f_score  = _ef(fonts, "playfair_bold",       20)
 
+    # Title line
     title = "STYLE ANALYSIS"
     if user_name:
         title = f"STYLE ANALYSIS  ·  {user_name.upper()}"
-    draw.text((16, 14), title, font=f_title, fill=E["accent_gold"])
+    draw.text((14, 12), title, font=f_title, fill=E["accent_gold"])
 
+    # Occasion below title
     if occasion:
-        draw.text((16, 50), _fmt_occasion(occasion), font=f_occ, fill=E["text_muted"])
+        draw.text((14, 46), _fmt_occasion(occasion), font=f_occ, fill=E["text_muted"])
 
-    # Score top-right — large, clear
+    # Score: top-right, clean
     if overall_score is not None:
         score_str = f"{overall_score} / 10"
         try:
             sw_px = f_score.getbbox(score_str)[2]
         except Exception:
-            sw_px = len(score_str) * 14
-        draw.text((total_w - sw_px - 20, 24), score_str,
+            sw_px = len(score_str) * 13
+        draw.text((total_w - sw_px - 18, 22), score_str,
                   font=f_score, fill=E["accent_gold"])
 
-    # ── 2. Caricature panel (left) ────────────────────────────────────────────
+    # ── 2. Caricature panel ────────────────────────────────────────────────────
     canvas.paste(fig, (0, HEADER_H))
 
-    # Score gauge — 60px radius, bottom-left corner of caricature
-    GAUGE_R  = 60
-    GAUGE_CX = GAUGE_R + 14
-    GAUGE_CY = HEADER_H + fh - GAUGE_R - 14
-    # Dark backing so gauge reads over caricature
-    draw.rectangle(
-        [GAUGE_CX - GAUGE_R - 10, GAUGE_CY - GAUGE_R - 10,
-         GAUGE_CX + GAUGE_R + 10, GAUGE_CY + GAUGE_R + 10],
-        fill=(16, 16, 16),
+    # Score gauge — bottom-left of caricature, minimal backing
+    GAUGE_R  = 52
+    GAUGE_CX = GAUGE_R + 16
+    GAUGE_CY = HEADER_H + fh - GAUGE_R - 16
+    # Minimal dark circle behind gauge (no heavy rectangle)
+    r_pad = GAUGE_R + 8
+    draw.ellipse(
+        [GAUGE_CX - r_pad, GAUGE_CY - r_pad,
+         GAUGE_CX + r_pad, GAUGE_CY + r_pad],
+        fill=(10, 10, 12),
     )
     if overall_score is not None:
         _draw_score_gauge(
             draw, GAUGE_CX, GAUGE_CY, overall_score,
             radius=GAUGE_R,
-            font_num=_ef(fonts, "playfair_bold",    34),
-            font_lbl=_ef(fonts, "montserrat_light", 12),
+            font_num=_ef(fonts, "playfair_bold",    30),
+            font_lbl=_ef(fonts, "montserrat_light", 10),
             colors=E,
         )
 
-    # ── 3. Vertical divider ────────────────────────────────────────────────────
+    # Thin vertical divider between panels
     draw.line([(img_col, HEADER_H), (img_col, HEADER_H + fh)],
               fill=E["divider"], width=1)
 
-    # ── 4. Remark cards (right panel) ─────────────────────────────────────────
+    # ── 3. Remark cards (right panel) ─────────────────────────────────────────
     chosen = _select(remarks, max_remarks)
+
+    # Vertically centre the card block: estimate total card height, add top margin
+    # so cards sit in the middle of the panel rather than flush at the top.
+    card_top_offset = _estimate_cards_top_offset(chosen, card_col, fh, fonts, E)
+
     _draw_remark_cards(
         draw, chosen,
         rx=img_col + 1,
-        ry=HEADER_H,
+        ry=HEADER_H + card_top_offset,
         col_w=card_col,
-        avail_h=fh,
+        avail_h=fh - card_top_offset,
         fonts=fonts,
         E=E,
     )
 
-    # ── 5. Footer ─────────────────────────────────────────────────────────────
+    # Subtle brand signature at bottom-right of card panel
+    f_sig = _ef(fonts, "montserrat_light", 9)
+    sig_y = HEADER_H + fh - 22
+    sig_x = img_col + card_col - 120
+    draw.text((sig_x, sig_y), "STYLE INTELLIGENCE", font=f_sig, fill=E["text_caption"])
+
+    # ── 4. Footer ─────────────────────────────────────────────────────────────
     fy = HEADER_H + fh
     _draw_palette_footer(
         draw, fy, total_w, FOOTER_H,
@@ -416,9 +487,9 @@ def _editorial_layout(
         recommended_outfit, fonts, E,
     )
 
-    # ── 6. SHOP section (optional — only when product_entries provided) ───────
+    # ── 5. SHOP section (optional) ────────────────────────────────────────────
     if product_entries:
-        shop_entries = _filter_shop_entries(product_entries, occasion, remarks, max_items=4)
+        shop_entries = _filter_shop_entries(product_entries, occasion, remarks, max_items=3)
         if shop_entries:
             _draw_shop_section(draw, canvas, fy + FOOTER_H, total_w, shop_entries, fonts, E)
 
@@ -435,32 +506,37 @@ def _draw_remark_cards(
     fonts: dict,
     E: dict,
 ) -> None:
-    """Draw stacked remark cards — content-height, no wasted space.
+    """Draw stacked remark cards — minimalist, clean, generous breathing room.
 
     Each card layout:
-      ┌─────────────────────────────────────────────────────┐
-      │▌ [1] CRITICAL  ·  UPPER BODY                        │  ← meta bar (11pt semibold, severity colour)
-      │  The kurta reads two levels below wedding standard.  │  ← issue text (13pt light, grey)
-      │  Upgrade to chanderi silk or raw silk blend.         │  ← fix text (15pt semibold, white)
-      └─────────────────────────────────────────────────────┘
+      ┌───────────────────────────────────────────────────────┐
+      │▌                                                       │  ← 3px severity bar
+      │   [1]  CRITICAL  ·  UPPER BODY                        │  ← meta (10pt semibold)
+      │                                                        │
+      │   The kurta fabric reads casual at a wedding.          │  ← issue (13pt light, warm grey)
+      │                                                        │
+      │   Upgrade to chanderi or raw silk-cotton blend.        │  ← fix (15pt semibold, white)
+      └───────────────────────────────────────────────────────┘
 
-    Card height = exactly what content needs (meta + issue lines + fix lines + padding).
-    Cards are stacked compactly top-to-bottom. If total cards overflow avail_h, scale
-    uniformly so they all fit.
+    No alternating backgrounds — all cards are the same panel_bg.
+    A thin 1px canvas_bg line separates cards (not a heavy bar).
+    Content is vertically centred within each card.
     """
-    BAR_W  = 8    # coloured left bar width
-    PAD_L  = BAR_W + 16
-    PAD_R  = 24
-    PAD_T  = 12   # top padding inside card
-    PAD_B  = 14   # bottom padding inside card
-    LINE_I = 20   # issue line height (14pt font)
-    LINE_F = 24   # fix line height (16pt font)
-    META_H = 22   # meta line height
-    GAP    = 3    # gap between cards
+    BAR_W   = 3     # thin severity bar — minimal
+    PAD_L   = BAR_W + 22  # generous left padding
+    PAD_R   = 28
+    PAD_T   = 14
+    PAD_B   = 14
+    LINE_M  = 18    # meta line height (10pt)
+    LINE_I  = 22    # issue line height (13pt)
+    LINE_F  = 26    # fix line height (15pt)
+    GAP_MI  = 8     # gap: meta → issue
+    GAP_IF  = 6     # gap: issue → fix
+    CARD_SEP = 1    # thin separator between cards
 
-    f_meta  = _ef(fonts, "montserrat_semibold", 12)
-    f_issue = _ef(fonts, "montserrat_light",    14)
-    f_fix   = _ef(fonts, "montserrat_semibold", 16)
+    f_meta  = _ef(fonts, "montserrat_semibold", 10)
+    f_issue = _ef(fonts, "montserrat_light",    13)
+    f_fix   = _ef(fonts, "montserrat_semibold", 15)
 
     n = len(remarks)
     if n == 0:
@@ -468,7 +544,7 @@ def _draw_remark_cards(
 
     text_w = col_w - PAD_L - PAD_R
 
-    # ── Pre-compute each card's natural height ─────────────────────────────────
+    # ── Pre-compute natural height for each card ───────────────────────────────
     card_specs: list[dict] = []
     for r in remarks:
         issue_text = (getattr(r, "issue", "") or "").strip()
@@ -477,96 +553,92 @@ def _draw_remark_cards(
         issue_lines = _wrap_px(issue_text, text_w, f_issue, max_lines=2) if issue_text else []
         fix_lines   = _wrap_px(fix_text,   text_w, f_fix,   max_lines=3) if fix_text   else []
 
-        natural_h = (PAD_T
-                     + META_H
+        content_h = (LINE_M
+                     + (GAP_MI if issue_lines else 0)
                      + len(issue_lines) * LINE_I
-                     + (4 if issue_lines and fix_lines else 0)   # gap between issue and fix
-                     + len(fix_lines)   * LINE_F
-                     + PAD_B)
+                     + (GAP_IF if issue_lines and fix_lines else 0)
+                     + len(fix_lines) * LINE_F)
+        natural_h = PAD_T + content_h + PAD_B
         card_specs.append({
             "r":           r,
             "issue_lines": issue_lines,
             "fix_lines":   fix_lines,
+            "content_h":   content_h,
             "natural_h":   natural_h,
         })
 
-    # ── Compute final card heights ─────────────────────────────────────────────
-    # GAP between cards is drawn as a solid divider stripe (3px), not blank space
-    GAP = 3
-    total_natural = sum(s["natural_h"] for s in card_specs) + GAP * (n - 1)
+    # ── Fit cards to available height ─────────────────────────────────────────
+    total_natural = sum(s["natural_h"] for s in card_specs) + CARD_SEP * (n - 1)
     if total_natural > avail_h:
-        # Scale all cards down proportionally so they all fit
+        # Must scale down — compress proportionally
         scale = avail_h / total_natural
         for s in card_specs:
-            s["card_h"] = max(50, int(s["natural_h"] * scale))
+            s["card_h"] = max(48, int(s["natural_h"] * scale))
     else:
-        # Spread leftover evenly as extra bottom breathing room per card
-        leftover    = avail_h - total_natural
-        extra_each  = leftover // n
+        # Keep cards at their natural height (compact, readable).
+        # Do NOT spread extra space — cards stay tight, top-aligned.
+        # Add a small equal bonus (up to 20px each) for slight breathing room.
+        leftover   = avail_h - total_natural
+        extra_each = min(20, leftover // max(1, n))
         for s in card_specs:
             s["card_h"] = s["natural_h"] + extra_each
 
     # ── Draw cards ────────────────────────────────────────────────────────────
     cy = ry
     for idx, spec in enumerate(card_specs):
-        r       = spec["r"]
-        card_h  = spec["card_h"]
-        cy2     = cy + card_h
+        r      = spec["r"]
+        card_h = spec["card_h"]
+        cy2    = cy + card_h
         sev_col = E.get(r.severity, E["minor"])
 
-        # Card background (alternating for scannability)
-        bg = E["card_bg"] if idx % 2 == 0 else E["panel_bg"]
-        draw.rectangle([rx, cy, rx + col_w - 1, cy2], fill=bg)
+        # Single consistent background — no alternating
+        draw.rectangle([rx, cy, rx + col_w - 1, cy2], fill=E["panel_bg"])
 
-        # Severity left bar
+        # Thin left severity bar (3px)
         draw.rectangle([rx, cy, rx + BAR_W, cy2], fill=sev_col)
 
-        # ── Compute content height to vertically centre inside card ───────────
-        n_issue  = len(spec["issue_lines"])
-        n_fix    = len(spec["fix_lines"])
-        gap_if   = 6 if (n_issue > 0 and n_fix > 0) else 0
-        content_h = META_H + n_issue * LINE_I + gap_if + n_fix * LINE_F
-        # Centre: start drawing at vertical midpoint minus half content height
-        top_space = (card_h - content_h) // 2
-        ty_start  = cy + max(PAD_T, top_space)
-
-        # ── Meta line: [N] CRITICAL  ·  UPPER BODY ────────────────────────────
+        # Vertical centering
+        top_space = (card_h - spec["content_h"]) // 2
+        ty = cy + max(PAD_T, top_space)
         tx = rx + PAD_L
-        ty = ty_start
 
-        num        = f"[{r.priority_order}]"
+        # ── Meta line ─────────────────────────────────────────────────────────
+        num        = str(r.priority_order)
         sev        = r.severity.upper()
         zone_label = r.body_zone.replace("-", " ").upper()
-        meta       = f"{num}  {sev}  ·  {zone_label}"
+        meta       = f"{num}   {sev}  ·  {zone_label}"
         draw.text((tx, ty), meta, font=f_meta, fill=sev_col)
-        ty += META_H
+        ty += LINE_M
 
         # ── Issue text ────────────────────────────────────────────────────────
-        for line in spec["issue_lines"]:
-            if ty + LINE_I > cy2 - 4:
-                break
-            draw.text((tx, ty), line, font=f_issue, fill=E["text_muted"])
-            ty += LINE_I
-        if spec["issue_lines"] and spec["fix_lines"]:
-            ty += gap_if
+        if spec["issue_lines"]:
+            ty += GAP_MI
+            for line in spec["issue_lines"]:
+                if ty + LINE_I > cy2 - 6:
+                    break
+                draw.text((tx, ty), line, font=f_issue, fill=E["text_muted"])
+                ty += LINE_I
 
         # ── Fix text ──────────────────────────────────────────────────────────
-        for i, line in enumerate(spec["fix_lines"]):
-            if ty + LINE_F > cy2 - 4:
-                trunc = _fit_text(line, text_w, f_fix)
-                draw.text((tx, ty), trunc, font=f_fix, fill=E["text_primary"])
-                break
-            draw.text((tx, ty), line, font=f_fix, fill=E["text_primary"])
-            ty += LINE_F
+        if spec["fix_lines"]:
+            if spec["issue_lines"]:
+                ty += GAP_IF
+            for line in spec["fix_lines"]:
+                if ty + LINE_F > cy2 - 4:
+                    trunc = _fit_text(line, text_w, f_fix)
+                    draw.text((tx, ty), trunc, font=f_fix, fill=E["text_primary"])
+                    break
+                draw.text((tx, ty), line, font=f_fix, fill=E["text_primary"])
+                ty += LINE_F
 
-        # Solid divider strip between cards (canvas_bg colour — clearly separates cards)
+        # Thin 1px separator line between cards (canvas_bg colour)
         if idx < n - 1:
             draw.rectangle(
-                [rx, cy2, rx + col_w - 1, cy2 + GAP],
+                [rx, cy2, rx + col_w - 1, cy2 + CARD_SEP],
                 fill=E["canvas_bg"],
             )
 
-        cy = cy2 + GAP
+        cy = cy2 + CARD_SEP
 
 
 def _draw_score_gauge(
@@ -619,89 +691,83 @@ def _draw_palette_footer(
     fonts: dict,
     E: dict,
 ) -> None:
-    """Draw footer: colour swatches left, Wear Instead text right."""
-    SWATCH_SZ   = 44    # DO swatch size
-    AVOID_SZ    = 32    # AVOID swatch size
-    SWATCH_GAP  = 10
-    PAD         = 18
+    """Draw footer: circular colour dots left, Wear Instead text right.
 
-    draw.rectangle([0, fy, total_w, fy + footer_h], fill=E["panel_bg"])
+    Minimalist — thin gold top line, circular swatches, clean label.
+    """
+    DOT_R    = 14     # radius of circular colour dot
+    DOT_GAP  = 10     # gap between dots
+    PAD      = 18
+
+    draw.rectangle([0, fy, total_w, fy + footer_h], fill=E["header_bg"])
     draw.line([(0, fy), (total_w, fy)], fill=E["accent_gold"], width=1)
 
-    f_lbl  = _ef(fonts, "montserrat_semibold", 10)
-    f_name = _ef(fonts, "montserrat_light",     9)
-    f_text = _ef(fonts, "montserrat_regular",  12)
+    f_lbl  = _ef(fonts, "montserrat_semibold", 9)
+    f_text = _ef(fonts, "montserrat_light",   12)
 
-    split_x = int(total_w * 0.60)
+    # Split: 55% for palette, 45% for wear instead
+    split_x = int(total_w * 0.55)
+    cy_mid  = fy + footer_h // 2  # vertical centre of footer
 
-    # ── YOUR PALETTE label ─────────────────────────────────────────────────────
+    # ── YOUR PALETTE label ────────────────────────────────────────────────────
     draw.text((PAD, fy + 10), "YOUR PALETTE", font=f_lbl, fill=E["accent_gold"])
 
-    # ── DO swatches ────────────────────────────────────────────────────────────
-    swatch_y  = fy + 28
-    name_y    = swatch_y + SWATCH_SZ + 3
-    sx        = PAD
+    # ── DO swatches — circular dots, centred vertically ──────────────────────
     do_colours = color_palette_do[:8] if color_palette_do else []
+    sx = PAD
+    dot_y = fy + footer_h // 2 + 4  # slightly below centre (allow label above)
     for colour in do_colours:
         rgb = _NAME_TO_RGB.get(colour.lower().strip())
         if rgb is None:
             continue
-        if sx + SWATCH_SZ > split_x - 20:
+        cx = sx + DOT_R
+        if cx + DOT_R > split_x - 20:
             break
-        # Swatch square
-        draw.rectangle(
-            [sx, swatch_y, sx + SWATCH_SZ, swatch_y + SWATCH_SZ],
-            fill=rgb,
-        )
-        draw.rectangle(
-            [sx, swatch_y, sx + SWATCH_SZ, swatch_y + SWATCH_SZ],
-            outline=E["divider"], width=1,
-        )
-        # Colour name below — abbreviated to 9 chars
-        label = colour[:9] if len(colour) <= 9 else colour[:8] + "."
-        draw.text((sx + 1, name_y), label, font=f_name, fill=E["text_caption"])
-        sx += SWATCH_SZ + SWATCH_GAP
+        draw.ellipse([cx - DOT_R, dot_y - DOT_R, cx + DOT_R, dot_y + DOT_R], fill=rgb)
+        sx += DOT_R * 2 + DOT_GAP
 
-    # ── AVOID swatches ─────────────────────────────────────────────────────────
+    # ── AVOID swatches — smaller, faded, with cross overlay ──────────────────
+    AVOID_R = 10
     avoid_colours = color_palette_dont[:5] if color_palette_dont else []
     if avoid_colours:
-        avoid_row_y = fy + footer_h - AVOID_SZ - 16
-        draw.text((PAD, avoid_row_y - 14), "AVOID", font=f_lbl, fill=E["critical"])
-        ax = PAD + 56
+        draw.text((PAD, fy + footer_h - AVOID_R * 2 - 16), "AVOID", font=f_lbl, fill=E["critical"])
+        ax = PAD + 52
+        ay = fy + footer_h - AVOID_R - 10
         for colour in avoid_colours:
             rgb = _NAME_TO_RGB.get(colour.lower().strip())
             if rgb is None:
                 continue
-            if ax + AVOID_SZ > split_x - 10:
+            if ax + AVOID_R > split_x - 10:
                 break
-            faded = tuple(int(c * 0.60) for c in rgb)
-            draw.rectangle(
-                [ax, avoid_row_y, ax + AVOID_SZ, avoid_row_y + AVOID_SZ],
+            faded = tuple(max(0, int(c * 0.55)) for c in rgb)
+            draw.ellipse(
+                [ax - AVOID_R, ay - AVOID_R, ax + AVOID_R, ay + AVOID_R],
                 fill=faded,
             )
-            draw.rectangle(
-                [ax, avoid_row_y, ax + AVOID_SZ, avoid_row_y + AVOID_SZ],
-                outline=E["critical"], width=1,
-            )
-            ax += AVOID_SZ + 8
+            # Small ✕ overlay
+            d = AVOID_R - 3
+            draw.line([(ax - d, ay - d), (ax + d, ay + d)], fill=E["critical"], width=1)
+            draw.line([(ax + d, ay - d), (ax - d, ay + d)], fill=E["critical"], width=1)
+            ax += AVOID_R * 2 + 8
 
-    # ── Vertical divider ───────────────────────────────────────────────────────
+    # ── Vertical divider ─────────────────────────────────────────────────────
     draw.line(
-        [(split_x, fy + 8), (split_x, fy + footer_h - 8)],
+        [(split_x, fy + 10), (split_x, fy + footer_h - 10)],
         fill=E["divider"], width=1,
     )
 
-    # ── WEAR INSTEAD ──────────────────────────────────────────────────────────
+    # ── WEAR INSTEAD ─────────────────────────────────────────────────────────
     wx = split_x + PAD
     draw.text((wx, fy + 10), "WEAR INSTEAD", font=f_lbl, fill=E["accent_gold"])
     if recommended_outfit:
-        wo_lines = _wrap_px(recommended_outfit, total_w - wx - PAD, f_text, max_lines=5)
-        wy = fy + 28
+        avail_w = total_w - wx - PAD
+        wo_lines = _wrap_px(recommended_outfit, avail_w, f_text, max_lines=4)
+        wy = fy + 26
         for line in wo_lines:
-            if wy + 15 > fy + footer_h - 4:
+            if wy + 14 > fy + footer_h - 4:
                 break
             draw.text((wx, wy), line, font=f_text, fill=E["text_muted"])
-            wy += 18
+            wy += 17
 
 
 def _filter_shop_entries(
@@ -758,133 +824,128 @@ def _draw_shop_section(
     fonts: dict,
     E: dict,
 ) -> None:
-    """Draw the SHOP THIS LOOK section below the footer.
+    """Draw SHOP THIS LOOK — clean, minimal 4-column grid.
 
-    Layout per product row (120px):
-    ┌──────────────────┬───────────────────┬────────────────────┬────────────────┐
-    │ CATEGORY (25%)   │ HIGH STREET (25%) │ DESIGNER (25%)     │ LUXURY (25%)   │
-    │ profile_reason   │ brand · price     │ brand · price      │ brand · price  │
-    │                  │ product_name      │ product_name       │ product_name   │
-    │                  │ search: ...       │ search: ...        │ search: ...    │
-    └──────────────────┴───────────────────┴────────────────────┴────────────────┘
+    Each row (100px):
+    ┌──────────────┬────────────────┬────────────────┬────────────────┐
+    │ CATEGORY     │ HIGH STREET    │ DESIGNER       │ LUXURY         │
+    │ reason       │ Brand · Price  │ Brand · Price  │ Brand · Price  │
+    │              │ Product name   │ Product name   │ Product name   │
+    └──────────────┴────────────────┴────────────────┴────────────────┘
+
+    Minimal: uniform backgrounds, thin 1px dividers, no heavy borders.
     """
-    from PIL import ImageDraw as _IDraw
+    SHOP_H_HDR = 52   # section header height
+    ROW_H      = 100  # per product row
+    PAD        = 16
 
-    SHOP_HEADER_H = 48
-    ROW_H         = 120
-    PAD           = 14
-
-    # Tier background colours
+    # Tier column backgrounds — subtle, barely different from canvas
     _TIER_BG: dict[str, tuple[int, int, int]] = {
-        "high_street": (38, 38, 42),
-        "designer":    (28, 32, 50),
-        "luxury":      (22, 20, 18),
+        "high_street": (22, 22, 26),
+        "designer":    (20, 22, 32),
+        "luxury":      (18, 16, 14),
     }
-    _TIER_LABEL: dict[str, str] = {
+    _TIER_LABELS: dict[str, str] = {
         "high_street": "HIGH STREET",
         "designer":    "DESIGNER",
         "luxury":      "LUXURY",
     }
-    _GOLD_BORDER = E["accent_gold"]
 
-    # ── SHOP header strip ───────────────────────────────────────────────────
-    draw.rectangle([0, sy, total_w, sy + SHOP_HEADER_H], fill=E["header_bg"])
-    draw.line([(0, sy), (total_w, sy)], fill=E["accent_gold"], width=2)
+    # ── Section header ────────────────────────────────────────────────────────
+    draw.rectangle([0, sy, total_w, sy + SHOP_H_HDR], fill=E["header_bg"])
+    draw.line([(0, sy), (total_w, sy)], fill=E["accent_gold"], width=1)
 
-    f_shop_title = _ef(fonts, "playfair_bold",      20)
-    f_tier_lbl   = _ef(fonts, "montserrat_semibold", 9)
-    f_brand      = _ef(fonts, "montserrat_semibold", 12)
-    f_product    = _ef(fonts, "montserrat_light",    10)
-    f_price      = _ef(fonts, "playfair_bold",       11)
-    f_search     = _ef(fonts, "montserrat_light",     8)
-    f_category   = _ef(fonts, "montserrat_semibold", 11)
-    f_reason     = _ef(fonts, "montserrat_light",     9)
+    f_header   = _ef(fonts, "playfair_bold",      18)
+    f_tier_lbl = _ef(fonts, "montserrat_semibold", 8)
+    f_brand    = _ef(fonts, "montserrat_semibold", 12)
+    f_product  = _ef(fonts, "montserrat_light",    10)
+    f_price    = _ef(fonts, "playfair_bold",        11)
+    f_cat      = _ef(fonts, "montserrat_semibold", 10)
+    f_reason   = _ef(fonts, "montserrat_light",     9)
+    f_search   = _ef(fonts, "montserrat_light",     8)
 
-    draw.text((16, sy + 14), "SHOP THIS LOOK", font=f_shop_title, fill=E["accent_gold"])
+    draw.text((PAD, sy + 16), "SHOP THIS LOOK", font=f_header, fill=E["accent_gold"])
 
     col_w     = total_w // 4
     tier_keys = ["high_street", "designer", "luxury"]
 
-    # ── Per-entry rows ──────────────────────────────────────────────────────
+    # ── Product rows ──────────────────────────────────────────────────────────
     for row_idx, entry in enumerate(entries):
-        row_y  = sy + SHOP_HEADER_H + row_idx * ROW_H
+        row_y  = sy + SHOP_H_HDR + row_idx * ROW_H
         row_y2 = row_y + ROW_H
 
-        # Row divider
+        # Thin row divider
         draw.line([(0, row_y), (total_w, row_y)], fill=E["divider"], width=1)
 
-        # ── Category column (col 0) ─────────────────────────────────────────
-        cat_bg = E["panel_bg"] if row_idx % 2 == 0 else E["card_bg"]
-        draw.rectangle([0, row_y, col_w - 1, row_y2], fill=cat_bg)
+        # ── Category column ────────────────────────────────────────────────
+        draw.rectangle([0, row_y, col_w - 1, row_y2], fill=E["canvas_bg"])
 
         category = str(getattr(entry, "category", "") or "")
         reason   = str(getattr(entry, "profile_reason", "") or "")
 
-        draw.text((PAD, row_y + 14), category[:28],
-                  font=f_category, fill=E["text_primary"])
+        cat_trunc = _fit_text(category, col_w - PAD * 2, f_cat)
+        draw.text((PAD, row_y + PAD), cat_trunc, font=f_cat, fill=E["text_primary"])
+
         reason_lines = _wrap_px(reason, col_w - PAD * 2, f_reason, max_lines=4)
-        ty = row_y + 32
+        ty = row_y + PAD + 18
         for line in reason_lines:
             if ty + 13 > row_y2 - 4:
                 break
             draw.text((PAD, ty), line, font=f_reason, fill=E["text_muted"])
-            ty += 14
+            ty += 13
 
-        # ── Tier columns (cols 1–3) ─────────────────────────────────────────
+        # ── Tier columns ────────────────────────────────────────────────────
         for t_idx, tier_key in enumerate(tier_keys):
             cx0 = col_w * (t_idx + 1)
             cx1 = cx0 + col_w - 1
 
             tier_obj = getattr(entry, tier_key, None)
-            tier_bg  = _TIER_BG.get(tier_key, E["panel_bg"])
-            draw.rectangle([cx0, row_y, cx1, row_y2], fill=tier_bg)
+            bg_col   = _TIER_BG.get(tier_key, E["canvas_bg"])
+            draw.rectangle([cx0, row_y, cx1, row_y2], fill=bg_col)
 
-            # Gold border for luxury column
+            # Thin left divider between tier columns
+            draw.line([(cx0, row_y), (cx0, row_y2)], fill=E["divider"], width=1)
+
+            # Thin gold top accent for luxury only
             if tier_key == "luxury":
-                draw.rectangle([cx0, row_y, cx1, row_y2],
-                               outline=_GOLD_BORDER, width=1)
+                draw.line([(cx0, row_y), (cx1, row_y)], fill=E["accent_gold"], width=1)
 
-            # Tier label
-            tier_label = _TIER_LABEL.get(tier_key, tier_key.upper())
-            draw.text((cx0 + PAD, row_y + 8), tier_label,
-                      font=f_tier_lbl, fill=E["accent_gold"])
+            # Tier label (small caps, gold)
+            lbl = _TIER_LABELS.get(tier_key, tier_key.upper())
+            draw.text((cx0 + PAD, row_y + 8), lbl, font=f_tier_lbl, fill=E["accent_gold"])
 
             if tier_obj is None:
                 continue
 
-            brand      = str(getattr(tier_obj, "brand", "") or "")
-            product    = str(getattr(tier_obj, "product_name", "") or "")
-            price      = str(getattr(tier_obj, "price_range", "") or "")
-            search     = str(getattr(tier_obj, "search_query", "") or "")
+            brand   = str(getattr(tier_obj, "brand", "") or "")
+            product = str(getattr(tier_obj, "product_name", "") or "")
+            price   = str(getattr(tier_obj, "price_range", "") or "")
+            search  = str(getattr(tier_obj, "search_query", "") or "")
+            tw      = col_w - PAD * 2
 
-            tier_text_w = col_w - PAD * 2
-
-            ty = row_y + 24
-            # Brand
-            draw.text((cx0 + PAD, ty), brand[:22],
+            ty = row_y + 22
+            # Brand — semibold white
+            draw.text((cx0 + PAD, ty), _fit_text(brand, tw, f_brand),
                       font=f_brand, fill=E["text_primary"])
-            ty += 18
-            # Price
-            draw.text((cx0 + PAD, ty), price,
-                      font=f_price, fill=E["accent_gold"])
+            ty += 17
+            # Price — gold
+            draw.text((cx0 + PAD, ty), price, font=f_price, fill=E["accent_gold"])
             ty += 16
-            # Product name (wrapped)
-            prod_lines = _wrap_px(product, tier_text_w, f_product, max_lines=2)
-            for line in prod_lines:
-                if ty + 13 > row_y2 - 18:
+            # Product name — light grey, wrapped
+            for line in _wrap_px(product, tw, f_product, max_lines=2):
+                if ty + 13 > row_y2 - 16:
                     break
                 draw.text((cx0 + PAD, ty), line, font=f_product, fill=E["text_muted"])
                 ty += 13
-            # Search query hint
-            if search and ty + 11 <= row_y2 - 4:
-                draw.text((cx0 + PAD, row_y2 - 16),
-                          f"Search: {search[:24]}",
+            # Search hint — very muted caption at bottom
+            if search and ty + 10 <= row_y2 - 4:
+                draw.text((cx0 + PAD, row_y2 - 14),
+                          f"↗ {search[:26]}",
                           font=f_search, fill=E["text_caption"])
 
-    # Bottom border
-    bottom_y = sy + SHOP_HEADER_H + len(entries) * ROW_H
-    draw.line([(0, bottom_y - 1), (total_w, bottom_y - 1)],
-              fill=E["divider"], width=1)
+    # Final bottom line
+    bottom_y = sy + SHOP_H_HDR + len(entries) * ROW_H
+    draw.line([(0, bottom_y - 1), (total_w, bottom_y - 1)], fill=E["divider"], width=1)
 
 
 def _fmt_occasion(occ: str) -> str:
