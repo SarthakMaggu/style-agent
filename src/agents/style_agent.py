@@ -247,6 +247,7 @@ def run_onboarding(
             raise StyleAgentError(str(exc)) from exc
         except Exception as exc:
             raise StyleAgentError(f"Folder profile build failed: {exc}") from exc
+        _generate_and_save_catalogue(profile)
         return profile
 
     if len(photo_paths) < 3:
@@ -292,12 +293,34 @@ def run_onboarding(
     except Exception as exc:
         raise StyleAgentError(f"Profile build failed: {exc}") from exc
 
+    _generate_and_save_catalogue(profile)
     return profile
 
 
 # ---------------------------------------------------------------------------
 # Private pipeline steps
 # ---------------------------------------------------------------------------
+
+
+def _generate_and_save_catalogue(profile: UserProfile) -> None:
+    """Generate a product catalogue for the user and persist it to disk.
+
+    Called at the end of onboarding. Failures are logged but never raised —
+    the profile is already saved successfully and the catalogue is optional.
+    """
+    try:
+        from src.agents.product_catalogue_agent import generate_product_catalogue
+        from src.storage.profile_store import save_catalogue
+
+        logger.info("Generating personalised product catalogue...")
+        catalogue = generate_product_catalogue(profile)
+        if catalogue:
+            save_catalogue(catalogue)
+            logger.info("Product catalogue saved (%d entries)", len(catalogue.entries))
+        else:
+            logger.warning("Product catalogue generation returned None — skipping save")
+    except Exception as exc:
+        logger.warning("Product catalogue generation failed (non-fatal): %s", exc)
 
 
 def _load_profile() -> UserProfile:
@@ -450,6 +473,7 @@ def _annotate(
         export_pdf: Also export a PDF alongside the JPEG.
     """
     from src.output.renderer import annotate_caricature
+    from src.storage.profile_store import load_catalogue
 
     all_remarks = (
         recommendation.outfit_remarks
@@ -457,6 +481,17 @@ def _annotate(
         + recommendation.accessory_remarks
         + recommendation.grooming_remarks
     )
+
+    # Load product catalogue (non-fatal if missing — generated at onboarding)
+    product_entries = None
+    try:
+        catalogue = load_catalogue()
+        if catalogue:
+            product_entries = catalogue.entries
+            logger.debug("Loaded product catalogue: %d entries", len(product_entries))
+    except Exception as exc:
+        logger.debug("Could not load product catalogue (non-fatal): %s", exc)
+
     return annotate_caricature(
         caricature_path,
         all_remarks,
@@ -473,6 +508,8 @@ def _annotate(
         user_name=recommendation.user_profile.preferred_name or "",
         whats_working=recommendation.whats_working or "",
         recommended_outfit=recommendation.recommended_outfit_instead or "",
+        # Product catalogue for SHOP section
+        product_entries=product_entries,
     )
 
 

@@ -248,3 +248,114 @@ def test_score_gauge_60px_radius(tmp_path):
         if found_gold:
             break
     assert found_gold, "Score gauge gold arc not found at expected radius"
+
+
+# ── Test 11: SHOP section increases canvas height ─────────────────────────────
+
+def _make_product_entry():
+    """Return a mock ProductEntry-like SimpleNamespace."""
+    tier_hs = SimpleNamespace(
+        tier="high_street", brand="Manyavar",
+        product_name="Silk blend kurta in rust", price_range="₹3,000–6,000",
+        search_query="manyavar silk kurta rust", why_for_you="Warm rust suits your undertone.",
+    )
+    tier_d = SimpleNamespace(
+        tier="designer", brand="FabIndia",
+        product_name="Chanderi kurta in champagne", price_range="₹8,000–14,000",
+        search_query="fabindia chanderi champagne", why_for_you="Chanderi reads formal.",
+    )
+    tier_l = SimpleNamespace(
+        tier="luxury", brand="Sabyasachi",
+        product_name="Raw silk bespoke kurta", price_range="₹45,000+",
+        search_query="sabyasachi silk kurta", why_for_you="Bespoke fits your athletic build.",
+    )
+    return SimpleNamespace(
+        category="Indian Formal Kurta",
+        occasion_relevance=["indian_formal", "wedding_guest_indian"],
+        profile_reason="No silk-blend kurta in wardrobe — highest impact gap.",
+        high_street=tier_hs,
+        designer=tier_d,
+        luxury=tier_l,
+    )
+
+
+def test_shop_section_increases_canvas_height(tmp_path):
+    """Passing product_entries must produce a taller canvas than without entries."""
+    from PIL import Image
+    from src.output.renderer import annotate_caricature
+
+    src = _make_png_file(tmp_path, width=300, height=400)
+    out_no_shop = str(tmp_path / "no_shop.jpg")
+    out_shop    = str(tmp_path / "with_shop.jpg")
+    remarks = [_make_remark("moderate", "upper-body")]
+
+    annotate_caricature(src, remarks, out_no_shop, use_vision_locate=False,
+                        layout_mode="editorial")
+    annotate_caricature(src, remarks, out_shop, use_vision_locate=False,
+                        layout_mode="editorial",
+                        product_entries=[_make_product_entry()])
+
+    h_no_shop = Image.open(out_no_shop).height
+    h_shop    = Image.open(out_shop).height
+    assert h_shop > h_no_shop, (
+        f"SHOP section should add height: got {h_shop} vs {h_no_shop}"
+    )
+
+
+# ── Test 12: _filter_shop_entries returns max_items entries ───────────────────
+
+def test_filter_shop_entries_respects_max_items():
+    """_filter_shop_entries must return at most max_items entries."""
+    from src.output.renderer import _filter_shop_entries
+
+    entries = [_make_product_entry() for _ in range(8)]
+    result = _filter_shop_entries(entries, occasion="indian_formal", remarks=[], max_items=3)
+    assert len(result) <= 3
+
+
+def test_filter_shop_entries_boosts_matching_occasion():
+    """_filter_shop_entries must rank matching occasions first."""
+    from src.output.renderer import _filter_shop_entries
+
+    entry_match = _make_product_entry()  # occasion_relevance contains indian_formal
+    entry_nomatch = SimpleNamespace(
+        category="Beach Shorts",
+        occasion_relevance=["beach"],
+        profile_reason="No beach shorts.",
+        high_street=entry_match.high_street,
+        designer=entry_match.designer,
+        luxury=entry_match.luxury,
+    )
+    entries = [entry_nomatch, entry_match]
+    result = _filter_shop_entries(entries, occasion="indian_formal", remarks=[], max_items=2)
+    # entry_match should rank first (higher occasion score)
+    assert result[0].category == "Indian Formal Kurta"
+
+
+# ── Test 13: annotate_caricature accepts product_entries without error ────────
+
+def test_annotate_with_multiple_product_entries(tmp_path):
+    """annotate_caricature with multiple product entries must produce a valid file."""
+    from PIL import Image
+    from src.output.renderer import annotate_caricature
+
+    src = _make_png_file(tmp_path, width=400, height=600)
+    out = str(tmp_path / "multi_shop.jpg")
+    remarks = [
+        _make_remark("critical",  "upper-body", "Upgrade the kurta.", "Cotton reads casual.", 1),
+        _make_remark("moderate",  "feet",        "Switch to mojaris.", "Wrong footwear.", 2),
+    ]
+    entries = [_make_product_entry() for _ in range(4)]
+
+    result = annotate_caricature(
+        src, remarks, out,
+        use_vision_locate=False,
+        layout_mode="editorial",
+        occasion="indian_formal",
+        overall_score=5,
+        color_palette_do=["rust", "mustard"],
+        product_entries=entries,
+    )
+    assert Path(result).exists()
+    img = Image.open(result)
+    assert img.height > 600  # SHOP section extends height

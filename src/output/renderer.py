@@ -188,6 +188,8 @@ def annotate_caricature(
     user_name: str = "",
     whats_working: str = "",
     recommended_outfit: str = "",
+    # Product catalogue entries for SHOP section — optional
+    product_entries: list[Any] | None = None,
 ) -> str:
     """Generate a fashion-editorial annotated image.
 
@@ -207,6 +209,7 @@ def annotate_caricature(
         user_name:          User's preferred name for header personalisation.
         whats_working:      One-line positive from recommendation.
         recommended_outfit: "Wear Instead" text for footer.
+        product_entries:    List of ProductEntry objects for the SHOP section (optional).
 
     Returns:
         Path to saved annotated image, or caricature_path on failure.
@@ -234,6 +237,7 @@ def annotate_caricature(
                 fig, remarks, max_remarks, overall_score,
                 color_palette_do or [], color_palette_dont or [],
                 occasion, user_name, whats_working, recommended_outfit,
+                product_entries or [],
             )
         else:
             canvas = _sidebar_layout(
@@ -290,6 +294,7 @@ def _editorial_layout(
     user_name: str,
     whats_working: str,
     recommended_outfit: str,
+    product_entries: list[Any] | None = None,
 ) -> Any:
     """Render the dark-mode editorial magazine layout.
 
@@ -326,7 +331,11 @@ def _editorial_layout(
     img_col  = fw                      # caricature column = figure width
     card_col = max(img_col, 680)       # card column, at least 680px
     total_w  = img_col + card_col
-    total_h  = fh + HEADER_H + FOOTER_H
+
+    # SHOP section height: 48px header + n_entries × 120px rows (max 4 entries)
+    n_shop_entries = min(4, len(product_entries)) if product_entries else 0
+    SHOP_H = (48 + n_shop_entries * 120) if n_shop_entries else 0
+    total_h  = fh + HEADER_H + FOOTER_H + SHOP_H
 
     canvas = Image.new("RGB", (total_w, total_h), E["canvas_bg"])
     draw   = ImageDraw.Draw(canvas)
@@ -339,21 +348,17 @@ def _editorial_layout(
     draw.line([(0, HEADER_H - 1), (total_w, HEADER_H - 1)],
               fill=E["accent_gold"], width=1)
 
-    f_title = _ef(fonts, "playfair_bold",       28)
+    f_title = _ef(fonts, "playfair_bold",       30)
     f_occ   = _ef(fonts, "montserrat_light",     14)
-    f_cap   = _ef(fonts, "montserrat_light",     10)
     f_score = _ef(fonts, "playfair_bold",         22)
 
     title = "STYLE ANALYSIS"
     if user_name:
         title = f"STYLE ANALYSIS  ·  {user_name.upper()}"
-    draw.text((16, 12), title, font=f_title, fill=E["accent_gold"])
+    draw.text((16, 14), title, font=f_title, fill=E["accent_gold"])
 
     if occasion:
-        draw.text((16, 46), _fmt_occasion(occasion), font=f_occ, fill=E["text_muted"])
-
-    draw.text((16, 62), "StyleAgent  ·  Fashion Intelligence",
-              font=f_cap, fill=E["text_caption"])
+        draw.text((16, 50), _fmt_occasion(occasion), font=f_occ, fill=E["text_muted"])
 
     # Score top-right — large, clear
     if overall_score is not None:
@@ -411,6 +416,12 @@ def _editorial_layout(
         recommended_outfit, fonts, E,
     )
 
+    # ── 6. SHOP section (optional — only when product_entries provided) ───────
+    if product_entries:
+        shop_entries = _filter_shop_entries(product_entries, occasion, remarks, max_items=4)
+        if shop_entries:
+            _draw_shop_section(draw, canvas, fy + FOOTER_H, total_w, shop_entries, fonts, E)
+
     return canvas
 
 
@@ -442,14 +453,14 @@ def _draw_remark_cards(
     PAD_R  = 24
     PAD_T  = 12   # top padding inside card
     PAD_B  = 14   # bottom padding inside card
-    LINE_I = 18   # issue line height
-    LINE_F = 22   # fix line height
+    LINE_I = 20   # issue line height (14pt font)
+    LINE_F = 24   # fix line height (16pt font)
     META_H = 22   # meta line height
     GAP    = 3    # gap between cards
 
-    f_meta  = _ef(fonts, "montserrat_semibold", 11)
-    f_issue = _ef(fonts, "montserrat_light",    13)
-    f_fix   = _ef(fonts, "montserrat_semibold", 15)
+    f_meta  = _ef(fonts, "montserrat_semibold", 12)
+    f_issue = _ef(fonts, "montserrat_light",    14)
+    f_fix   = _ef(fonts, "montserrat_semibold", 16)
 
     n = len(remarks)
     if n == 0:
@@ -691,6 +702,189 @@ def _draw_palette_footer(
                 break
             draw.text((wx, wy), line, font=f_text, fill=E["text_muted"])
             wy += 18
+
+
+def _filter_shop_entries(
+    entries: list[Any],
+    occasion: str,
+    remarks: list[Any],
+    max_items: int = 4,
+) -> list[Any]:
+    """Select the most relevant product entries for the current occasion + remarks.
+
+    Scoring:
+    - +2 if the entry's occasion_relevance contains the current occasion
+    - +1 for each remark whose category keyword appears in the entry's category name
+    Ties are broken by list order (original priority). Returns up to max_items.
+    """
+    # Categories mentioned in remarks
+    remark_categories: set[str] = set()
+    for r in remarks:
+        cat = (getattr(r, "category", "") or "").lower()
+        if cat:
+            remark_categories.add(cat)
+        zone = (getattr(r, "body_zone", "") or "").lower()
+        if zone:
+            remark_categories.add(zone.replace("-", " "))
+
+    scored: list[tuple[int, int, Any]] = []
+    for idx, entry in enumerate(entries):
+        score = 0
+        occ_relevance = getattr(entry, "occasion_relevance", []) or []
+        if occasion in occ_relevance:
+            score += 2
+        # Partial match: any occasion keyword appears
+        for occ_part in (occasion or "").split("_"):
+            if occ_part and any(occ_part in o for o in occ_relevance):
+                score += 1
+                break
+        # Remark category boost
+        entry_cat = (getattr(entry, "category", "") or "").lower()
+        for cat in remark_categories:
+            if cat in entry_cat or entry_cat in cat:
+                score += 1
+        scored.append((score, idx, entry))
+
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    return [e for _, _, e in scored[:max_items]]
+
+
+def _draw_shop_section(
+    draw: Any,
+    canvas: Any,
+    sy: int,
+    total_w: int,
+    entries: list[Any],
+    fonts: dict,
+    E: dict,
+) -> None:
+    """Draw the SHOP THIS LOOK section below the footer.
+
+    Layout per product row (120px):
+    ┌──────────────────┬───────────────────┬────────────────────┬────────────────┐
+    │ CATEGORY (25%)   │ HIGH STREET (25%) │ DESIGNER (25%)     │ LUXURY (25%)   │
+    │ profile_reason   │ brand · price     │ brand · price      │ brand · price  │
+    │                  │ product_name      │ product_name       │ product_name   │
+    │                  │ search: ...       │ search: ...        │ search: ...    │
+    └──────────────────┴───────────────────┴────────────────────┴────────────────┘
+    """
+    from PIL import ImageDraw as _IDraw
+
+    SHOP_HEADER_H = 48
+    ROW_H         = 120
+    PAD           = 14
+
+    # Tier background colours
+    _TIER_BG: dict[str, tuple[int, int, int]] = {
+        "high_street": (38, 38, 42),
+        "designer":    (28, 32, 50),
+        "luxury":      (22, 20, 18),
+    }
+    _TIER_LABEL: dict[str, str] = {
+        "high_street": "HIGH STREET",
+        "designer":    "DESIGNER",
+        "luxury":      "LUXURY",
+    }
+    _GOLD_BORDER = E["accent_gold"]
+
+    # ── SHOP header strip ───────────────────────────────────────────────────
+    draw.rectangle([0, sy, total_w, sy + SHOP_HEADER_H], fill=E["header_bg"])
+    draw.line([(0, sy), (total_w, sy)], fill=E["accent_gold"], width=2)
+
+    f_shop_title = _ef(fonts, "playfair_bold",      20)
+    f_tier_lbl   = _ef(fonts, "montserrat_semibold", 9)
+    f_brand      = _ef(fonts, "montserrat_semibold", 12)
+    f_product    = _ef(fonts, "montserrat_light",    10)
+    f_price      = _ef(fonts, "playfair_bold",       11)
+    f_search     = _ef(fonts, "montserrat_light",     8)
+    f_category   = _ef(fonts, "montserrat_semibold", 11)
+    f_reason     = _ef(fonts, "montserrat_light",     9)
+
+    draw.text((16, sy + 14), "SHOP THIS LOOK", font=f_shop_title, fill=E["accent_gold"])
+
+    col_w     = total_w // 4
+    tier_keys = ["high_street", "designer", "luxury"]
+
+    # ── Per-entry rows ──────────────────────────────────────────────────────
+    for row_idx, entry in enumerate(entries):
+        row_y  = sy + SHOP_HEADER_H + row_idx * ROW_H
+        row_y2 = row_y + ROW_H
+
+        # Row divider
+        draw.line([(0, row_y), (total_w, row_y)], fill=E["divider"], width=1)
+
+        # ── Category column (col 0) ─────────────────────────────────────────
+        cat_bg = E["panel_bg"] if row_idx % 2 == 0 else E["card_bg"]
+        draw.rectangle([0, row_y, col_w - 1, row_y2], fill=cat_bg)
+
+        category = str(getattr(entry, "category", "") or "")
+        reason   = str(getattr(entry, "profile_reason", "") or "")
+
+        draw.text((PAD, row_y + 14), category[:28],
+                  font=f_category, fill=E["text_primary"])
+        reason_lines = _wrap_px(reason, col_w - PAD * 2, f_reason, max_lines=4)
+        ty = row_y + 32
+        for line in reason_lines:
+            if ty + 13 > row_y2 - 4:
+                break
+            draw.text((PAD, ty), line, font=f_reason, fill=E["text_muted"])
+            ty += 14
+
+        # ── Tier columns (cols 1–3) ─────────────────────────────────────────
+        for t_idx, tier_key in enumerate(tier_keys):
+            cx0 = col_w * (t_idx + 1)
+            cx1 = cx0 + col_w - 1
+
+            tier_obj = getattr(entry, tier_key, None)
+            tier_bg  = _TIER_BG.get(tier_key, E["panel_bg"])
+            draw.rectangle([cx0, row_y, cx1, row_y2], fill=tier_bg)
+
+            # Gold border for luxury column
+            if tier_key == "luxury":
+                draw.rectangle([cx0, row_y, cx1, row_y2],
+                               outline=_GOLD_BORDER, width=1)
+
+            # Tier label
+            tier_label = _TIER_LABEL.get(tier_key, tier_key.upper())
+            draw.text((cx0 + PAD, row_y + 8), tier_label,
+                      font=f_tier_lbl, fill=E["accent_gold"])
+
+            if tier_obj is None:
+                continue
+
+            brand      = str(getattr(tier_obj, "brand", "") or "")
+            product    = str(getattr(tier_obj, "product_name", "") or "")
+            price      = str(getattr(tier_obj, "price_range", "") or "")
+            search     = str(getattr(tier_obj, "search_query", "") or "")
+
+            tier_text_w = col_w - PAD * 2
+
+            ty = row_y + 24
+            # Brand
+            draw.text((cx0 + PAD, ty), brand[:22],
+                      font=f_brand, fill=E["text_primary"])
+            ty += 18
+            # Price
+            draw.text((cx0 + PAD, ty), price,
+                      font=f_price, fill=E["accent_gold"])
+            ty += 16
+            # Product name (wrapped)
+            prod_lines = _wrap_px(product, tier_text_w, f_product, max_lines=2)
+            for line in prod_lines:
+                if ty + 13 > row_y2 - 18:
+                    break
+                draw.text((cx0 + PAD, ty), line, font=f_product, fill=E["text_muted"])
+                ty += 13
+            # Search query hint
+            if search and ty + 11 <= row_y2 - 4:
+                draw.text((cx0 + PAD, row_y2 - 16),
+                          f"Search: {search[:24]}",
+                          font=f_search, fill=E["text_caption"])
+
+    # Bottom border
+    bottom_y = sy + SHOP_HEADER_H + len(entries) * ROW_H
+    draw.line([(0, bottom_y - 1), (total_w, bottom_y - 1)],
+              fill=E["divider"], width=1)
 
 
 def _fmt_occasion(occ: str) -> str:
