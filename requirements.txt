@@ -1,0 +1,28 @@
+# StyleAgent — Python dependencies
+# Install with: pip install -r requirements.txt
+
+# ── Core AI APIs ───────────────────────────────────────────────
+anthropic>=0.81.0          # Claude Vision + Claude text API
+replicate>=1.0.0            # Replicate API for caricature generation
+
+# ── Data validation ────────────────────────────────────────────
+pydantic>=2.0.0             # Strict Pydantic v2 models (ConfigDict strict+forbid)
+
+# ── Image processing ───────────────────────────────────────────
+Pillow>=10.0.0              # Image validation, resize, base64 encoding
+pillow-heif>=0.13.0         # HEIC/HEIF support (iPhone photos)
+
+# ── CLI ────────────────────────────────────────────────────────
+click>=8.1.0                # CLI entry point with sub-commands
+
+# ── Resilience ─────────────────────────────────────────────────
+tenacity>=8.2.0             # Exponential backoff retry for API calls
+
+# ── Environment ────────────────────────────────────────────────
+python-dotenv>=1.0.0        # Load API keys from .env file
+
+# ── Dev / test (not needed in production) ──────────────────────
+pytest>=7.3.0
+pytest-mock>=3.10.0
+black>=23.0.0               # Code formatting
+ruff>=0.1.0                 # Linting (optional — install separately if preferred)

@@ -1,0 +1,281 @@
+[
+  {
+    "item": "oversized linen kurta in earth tones",
+    "category": "garment",
+    "occasions": ["indian_casual", "ethnic_fusion", "festival", "travel"],
+    "body_types": ["rectangle", "inverted_triangle"],
+    "region": "indian",
+    "trend_direction": "rising",
+    "stylist_note": "The dominant Indian casual menswear story this season — relaxed silhouette, natural fabric, warm palette."
+  },
+  {
+    "item": "resort-collar kurta shirt",
+    "category": "garment",
+    "occasions": ["indian_casual", "ethnic_fusion", "smart_casual", "party"],
+    "body_types": [],
+    "region": "indian",
+    "trend_direction": "peak",
+    "stylist_note": "Replaces the standard Nehru collar for casual occasions — works equally well with churidar or slim jeans."
+  },
+  {
+    "item": "pastel bandhgala with minimal embroidery",
+    "category": "garment",
+    "occasions": ["indian_formal", "wedding_guest_indian"],
+    "body_types": ["trapezoid", "rectangle", "inverted_triangle"],
+    "region": "indian",
+    "trend_direction": "rising",
+    "stylist_note": "A softer alternative to the heavily embellished sherwani — sage, dusty rose, and warm ivory are leading the palette."
+  },
+  {
+    "item": "handblock print wide-leg cotton trousers",
+    "category": "garment",
+    "occasions": ["indian_casual", "ethnic_fusion", "festival"],
+    "body_types": ["inverted_triangle", "rectangle", "trapezoid"],
+    "region": "indian",
+    "trend_direction": "rising",
+    "stylist_note": "Pairs naturally with a solid kurta or structured shirt — the print carries the visual weight."
+  },
+  {
+    "item": "linen-cotton fusion co-ordinate set",
+    "category": "garment",
+    "occasions": ["indian_casual", "smart_casual", "travel"],
+    "body_types": [],
+    "region": "indian",
+    "trend_direction": "rising",
+    "stylist_note": "Matching top and bottom in a woven or textured fabric — effortless, heat-appropriate, and visually cohesive."
+  },
+  {
+    "item": "structured kaftan over slim base",
+    "category": "garment",
+    "occasions": ["ethnic_fusion", "party", "festival"],
+    "body_types": ["oval", "rectangle"],
+    "region": "indian",
+    "trend_direction": "rising",
+    "stylist_note": "Layering a structured kaftan over fitted trousers works particularly well for broader frames or oval body shapes."
+  },
+  {
+    "item": "deep jewel-tone sherwani for weddings",
+    "category": "garment",
+    "occasions": ["wedding_guest_indian", "indian_formal"],
+    "body_types": [],
+    "region": "indian",
+    "trend_direction": "peak",
+    "stylist_note": "Sapphire, forest green, and deep burgundy are the dominant wedding season sherwani colors — richer than the ivory trend of previous seasons."
+  },
+  {
+    "item": "digital print ethnic shirt set",
+    "category": "garment",
+    "occasions": ["festival", "party", "indian_casual"],
+    "body_types": ["tall"],
+    "region": "indian",
+    "trend_direction": "rising",
+    "stylist_note": "Bold digital prints inspired by traditional motifs — works best on taller frames as the print needs space."
+  },
+  {
+    "item": "layered dhoti pants with structured top",
+    "category": "garment",
+    "occasions": ["festival", "ethnic_fusion", "party"],
+    "body_types": ["inverted_triangle", "rectangle"],
+    "region": "indian",
+    "trend_direction": "rising",
+    "stylist_note": "Dhoti pants in pleated or draped form with a clean structured kurta — proportion is key; avoid oversized top with dhoti."
+  },
+  {
+    "item": "kolhapuri-inspired footwear with Western trousers",
+    "category": "footwear",
+    "occasions": ["ethnic_fusion", "smart_casual", "indian_casual"],
+    "body_types": [],
+    "region": "indian",
+    "trend_direction": "rising",
+    "stylist_note": "The fusion crossover that's working — kolhapuris with clean chinos or slim jeans bridge Indian and Western dress codes naturally."
+  },
+  {
+    "item": "brass and gold hardware accessories",
+    "category": "accessory",
+    "occasions": ["indian_casual", "indian_formal", "ethnic_fusion"],
+    "body_types": [],
+    "region": "indian",
+    "trend_direction": "peak",
+    "stylist_note": "Brass buttons, gold-tone rings, and kadas are replacing silver as the dominant Indian menswear metal — warm and season-appropriate."
+  },
+  {
+    "item": "juttis and embroidered loafers",
+    "category": "footwear",
+    "occasions": ["indian_formal", "wedding_guest_indian", "ethnic_fusion"],
+    "body_types": [],
+    "region": "indian",
+    "trend_direction": "peak",
+    "stylist_note": "Embroidered footwear continues to be the dominant choice for Indian formal — from simple juttis to heavily embellished mojaris."
+  },
+  {
+    "item": "ochre and warm terracotta as the dominant Indian casual palette",
+    "category": "colour",
+    "occasions": ["indian_casual", "festival", "travel"],
+    "body_types": [],
+    "region": "indian",
+    "trend_direction": "peak",
+    "stylist_note": "Ochre, terracotta, and burnt sienna are the leading Indian casual palette — naturally suits warm undertones and reads contemporary."
+  },
+  {
+    "item": "pearl and ivory for Indian formal",
+    "category": "colour",
+    "occasions": ["indian_formal", "wedding_guest_indian"],
+    "body_types": [],
+    "region": "indian",
+    "trend_direction": "rising",
+    "stylist_note": "Warm pearl and ivory are replacing stark white in Indian formal — softer, more flattering, and reads more considered."
+  },
+  {
+    "item": "wider-leg tailored trousers",
+    "category": "garment",
+    "occasions": ["western_business_casual", "smart_casual", "party"],
+    "body_types": ["inverted_triangle", "rectangle", "trapezoid"],
+    "region": "western",
+    "trend_direction": "peak",
+    "stylist_note": "The slim trouser era is ending. Wide-leg tailored trousers with a clean break or no break are the dominant menswear silhouette."
+  },
+  {
+    "item": "relaxed-shoulder blazer without padding",
+    "category": "garment",
+    "occasions": ["western_business_casual", "smart_casual", "party"],
+    "body_types": [],
+    "region": "western",
+    "trend_direction": "peak",
+    "stylist_note": "Soft, unstructured shoulders replacing the padded power shoulder — a more relaxed, Italian-influenced silhouette."
+  },
+  {
+    "item": "earth tone suiting in oat, putty and warm sand",
+    "category": "colour",
+    "occasions": ["western_business_formal", "western_business_casual", "smart_casual"],
+    "body_types": [],
+    "region": "western",
+    "trend_direction": "rising",
+    "stylist_note": "Quiet luxury palette — oat, warm putty, and sand are replacing navy as the smart-casual suiting leader."
+  },
+  {
+    "item": "textured knit polo shirt",
+    "category": "garment",
+    "occasions": ["smart_casual", "western_business_casual", "travel"],
+    "body_types": [],
+    "region": "western",
+    "trend_direction": "rising",
+    "stylist_note": "The polo is back in textured knit form — waffle, micro-cable, or fine rib. Works as a layering piece or standalone."
+  },
+  {
+    "item": "vintage-wash medium-blue denim",
+    "category": "garment",
+    "occasions": ["western_streetwear", "smart_casual", "travel"],
+    "body_types": [],
+    "region": "western",
+    "trend_direction": "rising",
+    "stylist_note": "Medium blue wash is returning after a decade of dark denim. Look for even fade rather than artificial distress."
+  },
+  {
+    "item": "chunky derby and loafer in tan or cognac leather",
+    "category": "footwear",
+    "occasions": ["western_business_casual", "smart_casual"],
+    "body_types": [],
+    "region": "western",
+    "trend_direction": "rising",
+    "stylist_note": "The sleek Oxford is giving way to the chunkier derby and loafer with a slightly heavier sole — still formal enough for business casual."
+  },
+  {
+    "item": "utility-inspired smart casual: cargo chinos with structured top",
+    "category": "garment",
+    "occasions": ["smart_casual", "western_streetwear", "travel"],
+    "body_types": ["inverted_triangle", "rectangle"],
+    "region": "western",
+    "trend_direction": "rising",
+    "stylist_note": "Cargo chinos in neutral tones with a structured shirt or jacket — the utilitarian-smart crossover that works for most occasions short of formal."
+  },
+  {
+    "item": "tonal brown leather accessories",
+    "category": "accessory",
+    "occasions": ["smart_casual", "western_business_casual"],
+    "body_types": [],
+    "region": "western",
+    "trend_direction": "peak",
+    "stylist_note": "All-brown-leather accessory story — belt, watch strap, bag in the same warm cognac or tan family. Quiet luxury at its most accessible."
+  },
+  {
+    "item": "cropped outerwear over long base layers",
+    "category": "garment",
+    "occasions": ["western_streetwear", "smart_casual"],
+    "body_types": ["rectangle", "triangle"],
+    "region": "western",
+    "trend_direction": "rising",
+    "stylist_note": "Short jacket or overshirt over a longer base — hem layering as a proportion tool. Works best with an inverted triangle or rectangle frame."
+  },
+  {
+    "item": "monochromatic neutral layering",
+    "category": "garment",
+    "occasions": ["smart_casual", "western_business_casual", "travel"],
+    "body_types": [],
+    "region": "western",
+    "trend_direction": "peak",
+    "stylist_note": "Single-tone dressing in warm neutrals (oat, stone, putty, slate) — tonal variation across textures rather than colors."
+  },
+  {
+    "item": "slate blue and burgundy as 2025 accent tones",
+    "category": "colour",
+    "occasions": ["smart_casual", "western_business_casual", "party"],
+    "body_types": [],
+    "region": "western",
+    "trend_direction": "rising",
+    "stylist_note": "The two non-neutral standout colors this season — slate blue for day, burgundy for evening. Both work across cool and neutral undertones."
+  },
+  {
+    "item": "structured tote or document bag in leather",
+    "category": "accessory",
+    "occasions": ["western_business_formal", "western_business_casual"],
+    "body_types": [],
+    "region": "western",
+    "trend_direction": "peak",
+    "stylist_note": "The laptop bag is being replaced by the structured tote or slim document bag — cleaner, more editorial, office-appropriate."
+  },
+  {
+    "item": "minimal watch with integrated bracelet or leather strap",
+    "category": "accessory",
+    "occasions": ["smart_casual", "western_business_casual", "western_streetwear"],
+    "body_types": [],
+    "region": "western",
+    "trend_direction": "peak",
+    "stylist_note": "Clean-dial minimalist watches with integrated bracelets or classic leather straps — replacing the chunky sport watch for most non-gym occasions."
+  },
+  {
+    "item": "relaxed linen shirt in warm putty or natural",
+    "category": "garment",
+    "occasions": ["travel", "smart_casual", "western_business_casual", "beach"],
+    "body_types": [],
+    "region": "western",
+    "trend_direction": "rising",
+    "stylist_note": "Linen is the defining summer menswear fabric — natural, warm-toned linen in relaxed cuts is where the season is pointing."
+  },
+  {
+    "item": "clean white leather sneaker for smart-casual occasions",
+    "category": "footwear",
+    "occasions": ["smart_casual", "travel", "western_streetwear"],
+    "body_types": [],
+    "region": "global",
+    "trend_direction": "peak",
+    "stylist_note": "The white leather sneaker remains the universal smart-casual shoe. Condition is everything — scuffs or yellowing is not acceptable."
+  },
+  {
+    "item": "quiet luxury — no visible logos or branding",
+    "category": "garment",
+    "occasions": ["western_business_formal", "western_business_casual", "smart_casual"],
+    "body_types": [],
+    "region": "global",
+    "trend_direction": "peak",
+    "stylist_note": "The luxury signal has moved from logos to fabric quality, fit, and construction. A well-cut suit in quality fabric says more than a label."
+  },
+  {
+    "item": "chelsea boots in tan or cognac suede",
+    "category": "footwear",
+    "occasions": ["smart_casual", "western_business_casual", "western_streetwear"],
+    "body_types": [],
+    "region": "global",
+    "trend_direction": "peak",
+    "stylist_note": "The chelsea boot in suede is the versatile gap-filler between smart and casual — works with slim trousers, dark jeans, or chinos."
+  }
+]
