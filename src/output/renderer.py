@@ -283,59 +283,6 @@ def annotate_caricature(
 # Editorial layout — dark magazine aesthetic
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _estimate_cards_top_offset(
-    remarks: list[Any],
-    col_w: int,
-    avail_h: int,
-    fonts: dict,
-    E: dict,
-) -> int:
-    """Compute a top-offset so the card block is vertically centred in avail_h.
-
-    Returns offset in pixels (0 if cards already fill > 60% of panel).
-    """
-    if not remarks:
-        return 0
-
-    BAR_W  = 3
-    PAD_L  = BAR_W + 22
-    PAD_R  = 28
-    PAD_T  = 14
-    PAD_B  = 14
-    LINE_M = 18
-    LINE_I = 22
-    LINE_F = 26
-    GAP_MI = 8
-    GAP_IF = 6
-    CARD_SEP = 1
-    BONUS  = 20   # matches the bonus added in _draw_remark_cards
-
-    f_issue = _ef(fonts, "montserrat_light",    13)
-    f_fix   = _ef(fonts, "montserrat_semibold", 15)
-    text_w  = col_w - PAD_L - PAD_R
-
-    total_est = 0
-    for r in remarks:
-        issue_lines = _wrap_px((getattr(r, "issue", "") or "").strip(), text_w, f_issue, max_lines=2)
-        fix_lines   = _wrap_px((getattr(r, "fix",   "") or "").strip(), text_w, f_fix,   max_lines=3)
-        content_h = (LINE_M
-                     + (GAP_MI if issue_lines else 0)
-                     + len(issue_lines) * LINE_I
-                     + (GAP_IF if issue_lines and fix_lines else 0)
-                     + len(fix_lines) * LINE_F)
-        total_est += PAD_T + content_h + PAD_B + BONUS
-
-    total_est += CARD_SEP * max(0, len(remarks) - 1)
-
-    # If cards fill >65% of panel, don't add offset — they need the room
-    if total_est >= int(avail_h * 0.65):
-        return 0
-
-    # Centre: put half the leftover space above the cards (capped at 80px max offset)
-    leftover = avail_h - total_est
-    return min(80, leftover // 2)
-
-
 def _editorial_layout(
     fig: Any,
     remarks: list[Any],
@@ -349,149 +296,96 @@ def _editorial_layout(
     recommended_outfit: str,
     product_entries: list[Any] | None = None,
 ) -> Any:
-    """Render the dark-mode editorial magazine layout.
+    """Render the new editorial layout.
 
-    Minimalist, brand-quality design:
+    NO header. Recommendations left, cartoon right, shop at bottom.
 
-      ┌──────────────────────────────────────────────────────────────┐
-      │ ▌ STYLE ANALYSIS  ·  ARJUN          Smart Casual   5 / 10   │ ← 68px header
-      ├──────────────────────┬───────────────────────────────────────┤
-      │                      │                                       │
-      │   CARICATURE (45%)   │   REMARKS (55%)                       │
-      │   clean, full        │   clean cards, breathing room        │
-      │                      │                                       │
-      ├──────────────────────┴───────────────────────────────────────┤
-      │  ● ● ● ●    YOUR PALETTE      │  WEAR INSTEAD: ...           │ ← 80px footer
-      ├──────────────────────────────────────────────────────────────┤
-      │  SHOP THIS LOOK  (optional)                                   │
-      └──────────────────────────────────────────────────────────────┘
+      ┌──────────────────────────┬───────────────────────┐
+      │                          │                       │
+      │  RECOMMENDATIONS (48%)   │  CARICATURE  (52%)    │
+      │                          │                       │
+      │  1  Fix action bold      │  full cartoon image   │
+      │     Issue context grey   │  clean, no overlays   │
+      │                          │                       │
+      │  2  Fix action bold      │  score gauge          │
+      │     Issue context grey   │  bottom-right corner  │
+      │                          │                       │
+      ├──────────────────────────┴───────────────────────┤
+      │  SHOP THIS LOOK  (optional, only if entries)      │
+      └──────────────────────────────────────────────────┘
     """
     from PIL import Image, ImageDraw
 
-    E      = _EDITORIAL
-    fonts  = _ensure_editorial_fonts()
+    E     = _EDITORIAL
+    fonts = _ensure_editorial_fonts()
     fw, fh = fig.size
 
-    HEADER_H = 68
-    FOOTER_H = 80
-
-    # Ensure minimum figure height for readability
-    TARGET_FIG_H = max(fh, 620)
-    if fh < TARGET_FIG_H:
-        scale  = TARGET_FIG_H / fh
-        new_fw = int(fw * scale)
-        fig    = fig.resize((new_fw, TARGET_FIG_H))
+    # Ensure minimum height
+    TARGET_H = max(fh, 700)
+    if fh < TARGET_H:
+        scale = TARGET_H / fh
+        fig   = fig.resize((int(fw * scale), TARGET_H))
         fw, fh = fig.size
 
-    # Layout: 45% caricature, 55% cards — minimum total 1320px wide
+    # Columns: recs 48%, cartoon 52%
+    card_col = max(int(fw * 0.92), 660)
     img_col  = fw
-    card_col = max(int(fw * 1.22), 680)  # cards column always wider than caricature
-    total_w  = img_col + card_col
+    total_w  = card_col + img_col
 
-    # SHOP section: 52px header + rows × 100px per entry (max 3)
-    n_shop_entries = min(3, len(product_entries)) if product_entries else 0
-    SHOP_H = (52 + n_shop_entries * 100) if n_shop_entries else 0
+    # SHOP section height
+    n_shop = min(3, len(product_entries)) if product_entries else 0
+    SHOP_H = (52 + n_shop * 110) if n_shop else 0
 
-    total_h = fh + HEADER_H + FOOTER_H + SHOP_H
+    total_h = fh + SHOP_H
 
     canvas = Image.new("RGB", (total_w, total_h), E["canvas_bg"])
     draw   = ImageDraw.Draw(canvas)
 
-    # ── 1. Header ─────────────────────────────────────────────────────────────
-    draw.rectangle([0, 0, total_w, HEADER_H], fill=E["header_bg"])
-    # Thin gold accent bar (3px) at left edge
-    draw.rectangle([0, 0, 3, HEADER_H], fill=E["accent_gold"])
-    # 1px gold separator line under header
-    draw.line([(0, HEADER_H - 1), (total_w, HEADER_H - 1)],
-              fill=E["accent_gold"], width=1)
+    # ── 1. Cartoon — RIGHT panel ───────────────────────────────────────────────
+    canvas.paste(fig, (card_col, 0))
 
-    f_title  = _ef(fonts, "playfair_bold",      28)
-    f_occ    = _ef(fonts, "montserrat_light",    12)
-    f_score  = _ef(fonts, "playfair_bold",       20)
-
-    # Title line
-    title = "STYLE ANALYSIS"
-    if user_name:
-        title = f"STYLE ANALYSIS  ·  {user_name.upper()}"
-    draw.text((14, 12), title, font=f_title, fill=E["accent_gold"])
-
-    # Occasion below title
-    if occasion:
-        draw.text((14, 46), _fmt_occasion(occasion), font=f_occ, fill=E["text_muted"])
-
-    # Score: top-right, clean
+    # Score gauge — bottom-right corner of cartoon
     if overall_score is not None:
-        score_str = f"{overall_score} / 10"
-        try:
-            sw_px = f_score.getbbox(score_str)[2]
-        except Exception:
-            sw_px = len(score_str) * 13
-        draw.text((total_w - sw_px - 18, 22), score_str,
-                  font=f_score, fill=E["accent_gold"])
-
-    # ── 2. Caricature panel ────────────────────────────────────────────────────
-    canvas.paste(fig, (0, HEADER_H))
-
-    # Score gauge — bottom-left of caricature, minimal backing
-    GAUGE_R  = 52
-    GAUGE_CX = GAUGE_R + 16
-    GAUGE_CY = HEADER_H + fh - GAUGE_R - 16
-    # Minimal dark circle behind gauge (no heavy rectangle)
-    r_pad = GAUGE_R + 8
-    draw.ellipse(
-        [GAUGE_CX - r_pad, GAUGE_CY - r_pad,
-         GAUGE_CX + r_pad, GAUGE_CY + r_pad],
-        fill=(10, 10, 12),
-    )
-    if overall_score is not None:
+        GAUGE_R  = 48
+        GAUGE_CX = card_col + fw - GAUGE_R - 20
+        GAUGE_CY = fh - GAUGE_R - 20
+        # Dark circle backing
+        r_pad = GAUGE_R + 10
+        draw.ellipse(
+            [GAUGE_CX - r_pad, GAUGE_CY - r_pad,
+             GAUGE_CX + r_pad, GAUGE_CY + r_pad],
+            fill=(8, 8, 10),
+        )
         _draw_score_gauge(
             draw, GAUGE_CX, GAUGE_CY, overall_score,
             radius=GAUGE_R,
-            font_num=_ef(fonts, "playfair_bold",    30),
-            font_lbl=_ef(fonts, "montserrat_light", 10),
+            font_num=_ef(fonts, "playfair_bold",    28),
+            font_lbl=_ef(fonts, "montserrat_light",  9),
             colors=E,
         )
 
-    # Thin vertical divider between panels
-    draw.line([(img_col, HEADER_H), (img_col, HEADER_H + fh)],
-              fill=E["divider"], width=1)
+    # Thin vertical divider
+    draw.line([(card_col, 0), (card_col, fh)], fill=E["divider"], width=1)
 
-    # ── 3. Remark cards (right panel) ─────────────────────────────────────────
+    # ── 2. Recommendation cards — LEFT panel ───────────────────────────────────
     chosen = _select(remarks, max_remarks)
-
-    # Vertically centre the card block: estimate total card height, add top margin
-    # so cards sit in the middle of the panel rather than flush at the top.
-    card_top_offset = _estimate_cards_top_offset(chosen, card_col, fh, fonts, E)
-
     _draw_remark_cards(
         draw, chosen,
-        rx=img_col + 1,
-        ry=HEADER_H + card_top_offset,
+        rx=0,
+        ry=0,
         col_w=card_col,
-        avail_h=fh - card_top_offset,
+        avail_h=fh,
         fonts=fonts,
         E=E,
+        occasion=occasion,
+        overall_score=overall_score,
     )
 
-    # Subtle brand signature at bottom-right of card panel
-    f_sig = _ef(fonts, "montserrat_light", 9)
-    sig_y = HEADER_H + fh - 22
-    sig_x = img_col + card_col - 120
-    draw.text((sig_x, sig_y), "STYLE INTELLIGENCE", font=f_sig, fill=E["text_caption"])
-
-    # ── 4. Footer ─────────────────────────────────────────────────────────────
-    fy = HEADER_H + fh
-    _draw_palette_footer(
-        draw, fy, total_w, FOOTER_H,
-        color_palette_do, color_palette_dont,
-        recommended_outfit, fonts, E,
-    )
-
-    # ── 5. SHOP section (optional) ────────────────────────────────────────────
-    if product_entries:
+    # ── 3. SHOP section ────────────────────────────────────────────────────────
+    if product_entries and n_shop > 0:
         shop_entries = _filter_shop_entries(product_entries, occasion, remarks, max_items=3)
         if shop_entries:
-            _draw_shop_section(draw, canvas, fy + FOOTER_H, total_w, shop_entries, fonts, E)
+            _draw_shop_section(draw, canvas, fh, total_w, shop_entries, fonts, E)
 
     return canvas
 
@@ -505,137 +399,153 @@ def _draw_remark_cards(
     avail_h: int,
     fonts: dict,
     E: dict,
+    occasion: str = "",
+    overall_score: int | None = None,
 ) -> None:
-    """Draw stacked remark cards — minimalist, clean, generous breathing room.
+    """Draw luxury-magazine-style recommendation cards.
 
-    Each card layout:
-      ┌───────────────────────────────────────────────────────┐
-      │▌                                                       │  ← 3px severity bar
-      │   [1]  CRITICAL  ·  UPPER BODY                        │  ← meta (10pt semibold)
-      │                                                        │
-      │   The kurta fabric reads casual at a wedding.          │  ← issue (13pt light, warm grey)
-      │                                                        │
-      │   Upgrade to chanderi or raw silk-cotton blend.        │  ← fix (15pt semibold, white)
-      └───────────────────────────────────────────────────────┘
+    Layout — left panel, top to bottom:
 
-    No alternating backgrounds — all cards are the same panel_bg.
-    A thin 1px canvas_bg line separates cards (not a heavy bar).
-    Content is vertically centred within each card.
+      ┌────────────────────────────────────┐
+      │  INDIAN FORMAL  ·  5 / 10          │  ← occasion + score header (32px)
+      ├────────────────────────────────────┤
+      │                                    │
+      │▌  Upgrade to chanderi or raw       │  ← fix: large bold white (18pt)
+      │   silk-cotton blend, mid-thigh     │
+      │                                    │
+      │   The kurta fabric reads casual    │  ← issue: small muted grey (11pt)
+      │                                    │
+      ├────────────────────────────────────┤
+      │                                    │
+      │▌  Swap to embellished mojaris      │
+      │   or juttis in tan or gold.        │
+      │                                    │
+      │   Leather oxfords don't match      │
+      │   Indian traditional garments.     │
+      │                                    │
+      └────────────────────────────────────┘
+
+    Fix is BIG. Issue is small and below. Lots of whitespace. Clean numbered bar.
     """
-    BAR_W   = 3     # thin severity bar — minimal
-    PAD_L   = BAR_W + 22  # generous left padding
-    PAD_R   = 28
-    PAD_T   = 14
-    PAD_B   = 14
-    LINE_M  = 18    # meta line height (10pt)
-    LINE_I  = 22    # issue line height (13pt)
-    LINE_F  = 26    # fix line height (15pt)
-    GAP_MI  = 8     # gap: meta → issue
-    GAP_IF  = 6     # gap: issue → fix
-    CARD_SEP = 1    # thin separator between cards
+    PAD_X   = 36    # left/right padding
+    PAD_T   = 28    # top padding inside card
+    PAD_B   = 20    # bottom padding inside card
+    BAR_W   = 4     # severity bar width
+    HDR_H   = 36    # occasion+score strip at top
+    CARD_SEP = 1    # 1px separator between cards
 
-    f_meta  = _ef(fonts, "montserrat_semibold", 10)
-    f_issue = _ef(fonts, "montserrat_light",    13)
-    f_fix   = _ef(fonts, "montserrat_semibold", 15)
+    f_hdr   = _ef(fonts, "montserrat_semibold", 10)
+    f_num   = _ef(fonts, "playfair_bold",       20)
+    f_fix   = _ef(fonts, "playfair_bold",       18)
+    f_issue = _ef(fonts, "montserrat_light",    11)
 
     n = len(remarks)
     if n == 0:
         return
 
-    text_w = col_w - PAD_L - PAD_R
+    # ── Occasion + score strip at very top of panel ───────────────────────────
+    draw.rectangle([rx, ry, rx + col_w, ry + HDR_H], fill=E["header_bg"])
+    draw.line([(rx, ry + HDR_H - 1), (rx + col_w, ry + HDR_H - 1)],
+              fill=E["divider"], width=1)
 
-    # ── Pre-compute natural height for each card ───────────────────────────────
+    hdr_parts: list[str] = []
+    if occasion:
+        hdr_parts.append(_fmt_occasion(occasion).upper())
+    if overall_score is not None:
+        hdr_parts.append(f"{overall_score} / 10")
+    hdr_text = "   ·   ".join(hdr_parts) if hdr_parts else "STYLE ANALYSIS"
+    draw.text((rx + PAD_X, ry + 11), hdr_text, font=f_hdr, fill=E["text_caption"])
+
+    # ── Cards fill remaining space below header ────────────────────────────────
+    cards_ry    = ry + HDR_H
+    cards_avail = avail_h - HDR_H
+
+    text_w = col_w - PAD_X - 24    # text wrapping width
+
+    # Pre-compute natural card heights
     card_specs: list[dict] = []
     for r in remarks:
-        issue_text = (getattr(r, "issue", "") or "").strip()
         fix_text   = (getattr(r, "fix",   "") or "").strip()
+        issue_text = (getattr(r, "issue", "") or "").strip()
 
+        fix_lines   = _wrap_px(fix_text,   text_w, f_fix,   max_lines=4) if fix_text   else []
         issue_lines = _wrap_px(issue_text, text_w, f_issue, max_lines=2) if issue_text else []
-        fix_lines   = _wrap_px(fix_text,   text_w, f_fix,   max_lines=3) if fix_text   else []
 
-        content_h = (LINE_M
-                     + (GAP_MI if issue_lines else 0)
-                     + len(issue_lines) * LINE_I
-                     + (GAP_IF if issue_lines and fix_lines else 0)
-                     + len(fix_lines) * LINE_F)
+        # Number height + fix lines + issue lines
+        content_h = (
+            32                                     # number + spacing
+            + len(fix_lines) * 26                  # fix line height 26px
+            + (12 if issue_lines else 0)           # gap before issue
+            + len(issue_lines) * 16                # issue line height 16px
+        )
         natural_h = PAD_T + content_h + PAD_B
         card_specs.append({
             "r":           r,
-            "issue_lines": issue_lines,
             "fix_lines":   fix_lines,
+            "issue_lines": issue_lines,
             "content_h":   content_h,
             "natural_h":   natural_h,
         })
 
-    # ── Fit cards to available height ─────────────────────────────────────────
+    # Fit to available space
     total_natural = sum(s["natural_h"] for s in card_specs) + CARD_SEP * (n - 1)
-    if total_natural > avail_h:
-        # Must scale down — compress proportionally
-        scale = avail_h / total_natural
+    if total_natural > cards_avail:
+        scale = cards_avail / total_natural
         for s in card_specs:
-            s["card_h"] = max(48, int(s["natural_h"] * scale))
+            s["card_h"] = max(60, int(s["natural_h"] * scale))
     else:
-        # Keep cards at their natural height (compact, readable).
-        # Do NOT spread extra space — cards stay tight, top-aligned.
-        # Add a small equal bonus (up to 20px each) for slight breathing room.
-        leftover   = avail_h - total_natural
-        extra_each = min(20, leftover // max(1, n))
+        # Equal extra breathing room per card (capped at 40px each)
+        extra_each = min(40, (cards_avail - total_natural) // max(1, n))
         for s in card_specs:
             s["card_h"] = s["natural_h"] + extra_each
 
-    # ── Draw cards ────────────────────────────────────────────────────────────
-    cy = ry
+    # Draw each card
+    cy = cards_ry
     for idx, spec in enumerate(card_specs):
-        r      = spec["r"]
-        card_h = spec["card_h"]
-        cy2    = cy + card_h
+        r       = spec["r"]
+        card_h  = spec["card_h"]
+        cy2     = cy + card_h
         sev_col = E.get(r.severity, E["minor"])
 
-        # Single consistent background — no alternating
-        draw.rectangle([rx, cy, rx + col_w - 1, cy2], fill=E["panel_bg"])
+        # Card background — pure canvas_bg, no panel colour tint
+        draw.rectangle([rx, cy, rx + col_w - 1, cy2], fill=E["canvas_bg"])
 
-        # Thin left severity bar (3px)
+        # Left severity bar
         draw.rectangle([rx, cy, rx + BAR_W, cy2], fill=sev_col)
 
-        # Vertical centering
-        top_space = (card_h - spec["content_h"]) // 2
-        ty = cy + max(PAD_T, top_space)
-        tx = rx + PAD_L
+        tx = rx + PAD_X
+        ty = cy + PAD_T
 
-        # ── Meta line ─────────────────────────────────────────────────────────
-        num        = str(r.priority_order)
-        sev        = r.severity.upper()
-        zone_label = r.body_zone.replace("-", " ").upper()
-        meta       = f"{num}   {sev}  ·  {zone_label}"
-        draw.text((tx, ty), meta, font=f_meta, fill=sev_col)
-        ty += LINE_M
+        # Priority number — large playfair, gold
+        num_str = str(r.priority_order)
+        draw.text((tx, ty), num_str, font=f_num, fill=E["accent_gold"])
+        try:
+            num_w = f_num.getbbox(num_str)[2]
+        except Exception:
+            num_w = 20
+        ty += 32   # fixed gap after number
 
-        # ── Issue text ────────────────────────────────────────────────────────
-        if spec["issue_lines"]:
-            ty += GAP_MI
+        # Fix text — large, bold, white
+        for line in spec["fix_lines"]:
+            if ty + 26 > cy2 - 8:
+                break
+            draw.text((tx, ty), line, font=f_fix, fill=E["text_primary"])
+            ty += 26
+
+        # Issue text — small, muted, below fix
+        if spec["issue_lines"] and ty + 12 < cy2 - 8:
+            ty += 12   # gap between fix and issue
             for line in spec["issue_lines"]:
-                if ty + LINE_I > cy2 - 6:
+                if ty + 16 > cy2 - 4:
                     break
                 draw.text((tx, ty), line, font=f_issue, fill=E["text_muted"])
-                ty += LINE_I
+                ty += 16
 
-        # ── Fix text ──────────────────────────────────────────────────────────
-        if spec["fix_lines"]:
-            if spec["issue_lines"]:
-                ty += GAP_IF
-            for line in spec["fix_lines"]:
-                if ty + LINE_F > cy2 - 4:
-                    trunc = _fit_text(line, text_w, f_fix)
-                    draw.text((tx, ty), trunc, font=f_fix, fill=E["text_primary"])
-                    break
-                draw.text((tx, ty), line, font=f_fix, fill=E["text_primary"])
-                ty += LINE_F
-
-        # Thin 1px separator line between cards (canvas_bg colour)
+        # Thin separator
         if idx < n - 1:
             draw.rectangle(
                 [rx, cy2, rx + col_w - 1, cy2 + CARD_SEP],
-                fill=E["canvas_bg"],
+                fill=E["divider"],
             )
 
         cy = cy2 + CARD_SEP
