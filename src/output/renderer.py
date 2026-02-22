@@ -100,13 +100,16 @@ _EDITORIAL: dict[str, tuple[int, int, int]] = {
     "panel_bg":     (20,  20,  22),   # slightly lighter panel
     "card_bg":      (26,  26,  30),   # card background
     "divider":      (40,  40,  44),   # subtle divider — not too visible
-    "text_primary": (242, 240, 235),  # warm near-white
-    "text_muted":   (148, 144, 138),  # warm mid-grey
-    "text_caption": (80,  78,  74),   # very muted caption
+    "text_primary": (255, 255, 255),  # pure white — crisp on dark bg
+    "text_muted":   (190, 187, 182),  # warm light grey — clearly readable
+    "text_caption": (110, 107, 102),  # muted caption (boosted from 80)
     "accent_gold":  (210, 172, 95),   # warm editorial gold
     "critical":     (186, 50,  50),   # desaturated red — not garish
     "moderate":     (204, 128, 38),   # warm amber
     "minor":        (62,  148, 80),   # muted green
+    # Severity card background tints — subtle, not garish
+    "critical_bg":  (22,  12,  12),   # warm dark red undertone
+    "moderate_bg":  (20,  18,  10),   # warm amber undertone
 }
 
 # ── Colour name → RGB lookup for palette swatches ────────────────────────────
@@ -346,21 +349,21 @@ def _editorial_layout(
 
     # Score gauge — bottom-right corner of cartoon
     if overall_score is not None:
-        GAUGE_R  = 48
-        GAUGE_CX = card_col + fw - GAUGE_R - 20
-        GAUGE_CY = fh - GAUGE_R - 20
-        # Dark circle backing
-        r_pad = GAUGE_R + 10
+        GAUGE_R  = 52
+        GAUGE_CX = card_col + fw - GAUGE_R - 22
+        GAUGE_CY = fh - GAUGE_R - 22
+        # Dark circle backing — larger so gauge floats cleanly
+        r_pad = GAUGE_R + 14
         draw.ellipse(
             [GAUGE_CX - r_pad, GAUGE_CY - r_pad,
              GAUGE_CX + r_pad, GAUGE_CY + r_pad],
-            fill=(8, 8, 10),
+            fill=(6, 6, 8),
         )
         _draw_score_gauge(
             draw, GAUGE_CX, GAUGE_CY, overall_score,
             radius=GAUGE_R,
-            font_num=_ef(fonts, "playfair_bold",    28),
-            font_lbl=_ef(fonts, "montserrat_light",  9),
+            font_num=_ef(fonts, "playfair_bold",    32),
+            font_lbl=_ef(fonts, "montserrat_light", 10),
             colors=E,
         )
 
@@ -379,6 +382,7 @@ def _editorial_layout(
         E=E,
         occasion=occasion,
         overall_score=overall_score,
+        whats_working=whats_working,
     )
 
     # ── 3. SHOP section ────────────────────────────────────────────────────────
@@ -401,47 +405,55 @@ def _draw_remark_cards(
     E: dict,
     occasion: str = "",
     overall_score: int | None = None,
+    whats_working: str = "",
 ) -> None:
     """Draw luxury-magazine-style recommendation cards.
 
     Layout — left panel, top to bottom:
 
       ┌────────────────────────────────────┐
-      │  INDIAN FORMAL  ·  5 / 10          │  ← occasion + score header (32px)
+      │  WESTERN STREETWEAR  ·  4 / 10     │  ← occasion + score header (36px)
       ├────────────────────────────────────┤
       │                                    │
-      │▌  Upgrade to chanderi or raw       │  ← fix: large bold white (18pt)
-      │   silk-cotton blend, mid-thigh     │
+      │▌  1  Swap the cargo pants for a    │  ← number (gold) + fix: bold white 22pt
+      │      tapered olive or charcoal     │
       │                                    │
-      │   The kurta fabric reads casual    │  ← issue: small muted grey (11pt)
+      │      The oversized tee + relaxed   │  ← issue: muted grey 13pt
+      │      cargo creates a shapeless...  │
       │                                    │
       ├────────────────────────────────────┤
-      │                                    │
-      │▌  Swap to embellished mojaris      │
-      │   or juttis in tan or gold.        │
-      │                                    │
-      │   Leather oxfords don't match      │
-      │   Indian traditional garments.     │
-      │                                    │
+      │  WHAT'S WORKING                    │  ← gold label
+      │  The crop with volume on top is    │  ← text_muted 12pt
+      │  doing exactly right for your...   │
       └────────────────────────────────────┘
 
-    Fix is BIG. Issue is small and below. Lots of whitespace. Clean numbered bar.
+    Fix is BIG (22pt Playfair Bold white). Issue is readable (13pt grey).
+    Cards numbered sequentially 1,2,3... in render order.
+    CRITICAL cards have subtle dark-red tint. MODERATE have amber tint.
     """
-    PAD_X   = 36    # left/right padding
-    PAD_T   = 28    # top padding inside card
-    PAD_B   = 20    # bottom padding inside card
-    BAR_W   = 4     # severity bar width
-    HDR_H   = 36    # occasion+score strip at top
-    CARD_SEP = 1    # 1px separator between cards
+    PAD_X    = 36    # left/right padding
+    PAD_T    = 26    # top padding inside card
+    PAD_B    = 18    # bottom padding inside card
+    BAR_W    = 5     # severity bar width (was 4)
+    HDR_H    = 36    # occasion+score strip at top
+    CARD_SEP = 1     # 1px separator between cards
+    WHATS_H  = 80    # reserve height for "what's working" block if text exists
 
-    f_hdr   = _ef(fonts, "montserrat_semibold", 10)
-    f_num   = _ef(fonts, "playfair_bold",       20)
-    f_fix   = _ef(fonts, "playfair_bold",       18)
-    f_issue = _ef(fonts, "montserrat_light",    11)
+    # ── Font sizes — boosted for readability after JPEG compression ───────────
+    f_hdr   = _ef(fonts, "montserrat_semibold", 11)   # was 10
+    f_num   = _ef(fonts, "playfair_bold",       22)   # priority number
+    f_fix   = _ef(fonts, "playfair_bold",       22)   # was 18 — main fix text
+    f_issue = _ef(fonts, "montserrat_light",    13)   # was 11 — issue context
+    f_ww_lbl = _ef(fonts, "montserrat_semibold", 9)   # "WHAT'S WORKING" label
+    f_ww    = _ef(fonts, "montserrat_light",    12)   # whats_working body text
 
     n = len(remarks)
     if n == 0:
         return
+
+    # Reserve space at bottom for "what's working" if text provided
+    has_ww = bool(whats_working and whats_working.strip())
+    ww_reserve = WHATS_H if has_ww else 0
 
     # ── Occasion + score strip at very top of panel ───────────────────────────
     draw.rectangle([rx, ry, rx + col_w, ry + HDR_H], fill=E["header_bg"])
@@ -454,13 +466,21 @@ def _draw_remark_cards(
     if overall_score is not None:
         hdr_parts.append(f"{overall_score} / 10")
     hdr_text = "   ·   ".join(hdr_parts) if hdr_parts else "STYLE ANALYSIS"
-    draw.text((rx + PAD_X, ry + 11), hdr_text, font=f_hdr, fill=E["text_caption"])
+    # Occasion in accent_gold — clearly visible on near-black header
+    draw.text((rx + PAD_X, ry + 12), hdr_text, font=f_hdr, fill=E["text_muted"])
 
-    # ── Cards fill remaining space below header ────────────────────────────────
+    # ── Cards fill remaining space below header (above ww reserve) ───────────
     cards_ry    = ry + HDR_H
-    cards_avail = avail_h - HDR_H
+    cards_avail = avail_h - HDR_H - ww_reserve
 
     text_w = col_w - PAD_X - 24    # text wrapping width
+
+    # Severity card background tints — subtle warmth, not garish
+    _SEV_BG: dict[str, tuple[int, int, int]] = {
+        "critical": E.get("critical_bg", (22, 12, 12)),
+        "moderate": E.get("moderate_bg", (20, 18, 10)),
+        "minor":    E["canvas_bg"],
+    }
 
     # Pre-compute natural card heights
     card_specs: list[dict] = []
@@ -474,9 +494,9 @@ def _draw_remark_cards(
         # Number height + fix lines + issue lines
         content_h = (
             32                                     # number + spacing
-            + len(fix_lines) * 26                  # fix line height 26px
-            + (12 if issue_lines else 0)           # gap before issue
-            + len(issue_lines) * 16                # issue line height 16px
+            + len(fix_lines) * 29                  # fix line height 29px (22pt)
+            + (14 if issue_lines else 0)           # gap before issue
+            + len(issue_lines) * 19                # issue line height 19px (13pt)
         )
         natural_h = PAD_T + content_h + PAD_B
         card_specs.append({
@@ -490,65 +510,90 @@ def _draw_remark_cards(
     # Fit to available space
     total_natural = sum(s["natural_h"] for s in card_specs) + CARD_SEP * (n - 1)
     if total_natural > cards_avail:
-        scale = cards_avail / total_natural
+        scale = cards_avail / max(1, total_natural)
         for s in card_specs:
-            s["card_h"] = max(60, int(s["natural_h"] * scale))
+            s["card_h"] = max(70, int(s["natural_h"] * scale))
     else:
         # Equal extra breathing room per card (capped at 40px each)
         extra_each = min(40, (cards_avail - total_natural) // max(1, n))
         for s in card_specs:
             s["card_h"] = s["natural_h"] + extra_each
 
-    # Draw each card
+    # Draw each card — numbered sequentially 1,2,3… in render order
     cy = cards_ry
-    for idx, spec in enumerate(card_specs):
+    for display_num, spec in enumerate(card_specs, start=1):
         r       = spec["r"]
         card_h  = spec["card_h"]
         cy2     = cy + card_h
         sev_col = E.get(r.severity, E["minor"])
+        sev_bg  = _SEV_BG.get(r.severity, E["canvas_bg"])
 
-        # Card background — pure canvas_bg, no panel colour tint
-        draw.rectangle([rx, cy, rx + col_w - 1, cy2], fill=E["canvas_bg"])
+        # Card background — severity-tinted (critical = red tint, moderate = amber tint)
+        draw.rectangle([rx, cy, rx + col_w - 1, cy2], fill=sev_bg)
 
         # Left severity bar
         draw.rectangle([rx, cy, rx + BAR_W, cy2], fill=sev_col)
 
+        # Right-edge gold accent line — premium feel
+        draw.line(
+            [(rx + col_w - 1, cy), (rx + col_w - 1, cy2)],
+            fill=E["accent_gold"], width=1,
+        )
+
         tx = rx + PAD_X
         ty = cy + PAD_T
 
-        # Priority number — large playfair, gold
-        num_str = str(r.priority_order)
+        # Sequential display number — large playfair, gold
+        num_str = str(display_num)
         draw.text((tx, ty), num_str, font=f_num, fill=E["accent_gold"])
-        try:
-            num_w = f_num.getbbox(num_str)[2]
-        except Exception:
-            num_w = 20
         ty += 32   # fixed gap after number
 
-        # Fix text — large, bold, white
+        # Fix text — large, bold, pure white
         for line in spec["fix_lines"]:
-            if ty + 26 > cy2 - 8:
+            if ty + 29 > cy2 - 8:
                 break
             draw.text((tx, ty), line, font=f_fix, fill=E["text_primary"])
-            ty += 26
+            ty += 29
 
-        # Issue text — small, muted, below fix
-        if spec["issue_lines"] and ty + 12 < cy2 - 8:
-            ty += 12   # gap between fix and issue
+        # Issue text — readable muted grey (13pt), below fix
+        if spec["issue_lines"] and ty + 14 < cy2 - 8:
+            ty += 14   # gap between fix and issue
             for line in spec["issue_lines"]:
-                if ty + 16 > cy2 - 4:
+                if ty + 19 > cy2 - 4:
                     break
                 draw.text((tx, ty), line, font=f_issue, fill=E["text_muted"])
-                ty += 16
+                ty += 19
 
         # Thin separator
-        if idx < n - 1:
+        if display_num < n:
             draw.rectangle(
                 [rx, cy2, rx + col_w - 1, cy2 + CARD_SEP],
                 fill=E["divider"],
             )
 
         cy = cy2 + CARD_SEP
+
+    # ── "WHAT'S WORKING" block at bottom of left panel ───────────────────────
+    if has_ww:
+        ww_y = avail_h - ww_reserve + ry
+        # Gold top-line separator
+        draw.line([(rx, ww_y), (rx + col_w, ww_y)], fill=E["accent_gold"], width=1)
+        # Dark background for this block
+        draw.rectangle([rx, ww_y + 1, rx + col_w - 1, ry + avail_h], fill=E["header_bg"])
+
+        # Label
+        draw.text((rx + PAD_X, ww_y + 10), "WHAT'S WORKING",
+                  font=f_ww_lbl, fill=E["accent_gold"])
+
+        # Body text — wrapped
+        ww_text_w = col_w - PAD_X - 24
+        ww_lines  = _wrap_px(whats_working.strip(), ww_text_w, f_ww, max_lines=4)
+        wy = ww_y + 24
+        for line in ww_lines:
+            if wy + 16 > ry + avail_h - 4:
+                break
+            draw.text((rx + PAD_X, wy), line, font=f_ww, fill=E["text_muted"])
+            wy += 17
 
 
 def _draw_score_gauge(
